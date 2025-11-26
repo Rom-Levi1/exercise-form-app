@@ -42,6 +42,8 @@
   display: flex;
   justify-content: center;
   text-align: center;
+  align-items: center;
+  min-height: 70vh; /* makes page feel fuller */
 }
 
 .hero-text {
@@ -55,10 +57,19 @@
 
 .hero p {
   font-size: 1.05rem;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   color: #d4d4ff;
 }
 
+/* extra explanation text under main paragraph */
+.hero-extra {
+  font-size: 0.95rem;
+  color: #bfc5ff;
+  opacity: 0.9;
+  margin-bottom: 20px;
+}
+
+/* main button */
 .primary-btn {
   padding: 12px 24px;
   font-size: 1rem;
@@ -70,6 +81,15 @@
   font-weight: 600;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* make login button wider */
+.login-wide {
+  width: 90%;
+  max-width: 420px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  text-align: center;
 }
 
 .primary-btn:hover {
@@ -106,9 +126,11 @@
 
 .steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-top: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 80%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .step-card {
