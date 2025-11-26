@@ -1,0 +1,139 @@
+/* We already have global body + font styles in App.css, so this
+   file only adds styles for the auth page. */
+
+.auth-page {
+  min-height: 100vh;
+  background: #060716;
+  color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top bar */
+.auth-header {
+  padding: 16px 32px;
+  background: #080a1f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+}
+
+.auth-header .logo {
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.03em;
+}
+
+/* Center card */
+.auth-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 16px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #080a1f;
+  border-radius: 16px;
+  padding: 24px 24px 28px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Tabs */
+.auth-tabs {
+  display: flex;
+  background: #060716;
+  border-radius: 999px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+
+.auth-tabs .tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #c8c9ff;
+  padding: 8px 0;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.auth-tabs .tab.active {
+  background: linear-gradient(135deg, #4f46e5, #10b981);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Text */
+.auth-title {
+  font-size: 1.4rem;
+  margin-bottom: 6px;
+}
+
+.auth-subtitle {
+  font-size: 0.9rem;
+  color: #d4d4ff;
+  margin-bottom: 18px;
+}
+
+/* Form */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  gap: 4px;
+}
+
+.auth-input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #060716;
+  color: #f5f5f5;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.auth-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.6);
+}
+
+.auth-primary-btn {
+  margin-top: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: not-allowed; /* disabled for now */
+  background: linear-gradient(135deg, #4f46e5, #10b981);
+  color: #ffffff;
+  opacity: 0.7; /* visually disabled */
+}
+
+.auth-note {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Footer */
+.auth-footer {
+  text-align: center;
+  padding: 14px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
