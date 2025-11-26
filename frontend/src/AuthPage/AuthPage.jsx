@@ -2,7 +2,7 @@
 import { useState } from "react";
 import "./AuthPage.css";
 
-function AuthPage() {
+function AuthPage({ onBackClick }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
 
   const handleSubmit = (e) => {
@@ -15,8 +15,14 @@ function AuthPage() {
     <div className="auth-page">
       {/* Top bar – same vibe as the main page */}
       <header className="auth-header">
-        <div className="logo">Tech-nique</div>
+        <div
+          className="logo clickable-logo"
+          onClick={onBackClick}
+        >
+          Tech-nique
+        </div>
       </header>
+
 
       <main className="auth-main">
         <div className="auth-card">
