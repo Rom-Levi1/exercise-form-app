@@ -1,11 +1,18 @@
 // src/App.js
-import React from "react";
+import React, { useState } from "react";
 import "./App.css";
+
 import HomeScreen from "./Homepage/Homepage";
+import AuthPage from "./AuthPage/AuthPage";
 
 function App() {
-  return <HomeScreen />;
+  const [showAuth, setShowAuth] = useState(false);
+
+  return showAuth ? (
+    <AuthPage onBackClick={() => setShowAuth(false)} />
+  ) : (
+    <HomeScreen onLoginClick={() => setShowAuth(true)} />
+  );
 }
 
 export default App;
-
