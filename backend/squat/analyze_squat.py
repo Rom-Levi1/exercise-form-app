@@ -29,6 +29,19 @@ def main():
     if not cap.isOpened():
         print("Error: could not open video:", video_path)
         return
+    
+    paused = False  # play/pause state
+
+    window_name = "Squat Video Analysis"
+    cv2.namedWindow(window_name)
+
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    def on_trackbar(val):
+        # jump to selected frame when user drags the bar
+        cap.set(cv2.CAP_PROP_POS_FRAMES, val)
+
+    cv2.createTrackbar("Position", window_name, 0, max(frame_count - 1, 1), on_trackbar)
 
     with mp_pose.Pose(
         static_image_mode=False,
@@ -41,7 +54,7 @@ def main():
         while True:
             ret, frame = cap.read()
             if not ret:
-                break  # end of video
+                break  # end of video   
 
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image_rgb.flags.writeable = False
@@ -72,14 +85,25 @@ def main():
 
                     angle = calculate_angle(hip_xy, knee_xy, ankle_xy)
                     feedback_text = f"Knee angle: {int(angle)}°"
-
-                    # Very simple squat form logic
+                    # Squat depth
                     if angle < 80:
                         feedback_text = "Good depth"
                     elif angle < 140:
                         feedback_text = "Go lower"
                     else:
                         feedback_text = "Starting position"
+
+                    # 🟠 Knee over toes check (X axis)
+                    left_toe = landmarks[mp_pose.PoseLandmark.LEFT_FOOT_INDEX.value]
+                    knee_toe_diff = left_toe.x - knee.x  # normalized [-1,1] space in ratio
+
+                    if knee_toe_diff > 0.2:  # knee passed toes too much
+                        feedback_text += " | Knee too far over toes"
+                    elif knee_toe_diff > 0.02:
+                        feedback_text += " | Knee slightly over toes"
+                    else:
+                        feedback_text += " | Knee alignment good"
+
 
                     h, w, _ = image_bgr.shape
                     knee_px = (int(knee.x * w), int(knee.y * h))
@@ -108,10 +132,35 @@ def main():
                 2
             )
 
-            cv2.imshow("Squat Video Analysis", image_bgr)
+            # show frame
+            cv2.imshow(window_name, image_bgr)
 
-            if cv2.waitKey(20) & 0xFF == ord('q'):
-                break
+            # update slider position to current frame
+            current_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+            cv2.setTrackbarPos("Position", window_name, current_frame)
+
+            # wait for key: if paused, wait forever until a key; else ~20ms
+            key = cv2.waitKey(0 if paused else 20) & 0xFF
+
+            if key == ord('q' | 'Q'):
+                break  # quit
+
+            elif key == 32:  # SPACE = play/pause
+                paused = not paused
+
+            elif key == ord('s'):  # 's' = stop (pause and go to start)
+                paused = True
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+            elif key == ord('d'):  # 'd' = step forward 1 frame
+                paused = True  # stay paused
+                # nothing else; next loop iteration will read next frame
+
+            elif key == ord('a'):  # 'a' = step back ~1 frame
+                paused = True
+                pos = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, pos - 2))
+
 
     cap.release()
     cv2.destroyAllWindows()
