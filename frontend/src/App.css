@@ -11,3 +11,12 @@ body {
   color: #f5f5f5;
   min-height: 100vh;
 }
+/* Make all logos clickable and consistent */
+.clickable-logo {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.clickable-logo:hover {
+  opacity: 0.7;
+}

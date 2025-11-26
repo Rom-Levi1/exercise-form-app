@@ -3,12 +3,14 @@ import React from "react";
 import "../App.css";
 import "./Homepage.css";
 
-function HomeScreen({ onLoginClick }) {
+function HomeScreen({ onLoginClick, onLogoClick }) {
   return (
     <div className="app">
       {/* Top bar */}
       <header className="app-header">
-        <div className="logo">Tech-nique</div>
+        <div className="logo clickable-logo" onClick={onLogoClick}>
+          Tech-nique
+        </div>
         <nav className="nav">
           <a href="#how-it-works">How it works</a>
           <a href="#features">Features</a>

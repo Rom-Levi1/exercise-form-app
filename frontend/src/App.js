@@ -11,7 +11,10 @@ function App() {
   return showAuth ? (
     <AuthPage onBackClick={() => setShowAuth(false)} />
   ) : (
-    <HomeScreen onLoginClick={() => setShowAuth(true)} />
+    <HomeScreen
+      onLoginClick={() => setShowAuth(true)}
+      onLogoClick={() => setShowAuth(false)}
+    />
   );
 }
 
