@@ -3,7 +3,7 @@ import React from "react";
 import "../App.css";
 import "./Homepage.css";
 
-function HomeScreen() {
+function HomeScreen({ onLoginClick }) {
   return (
     <div className="app">
       {/* Top bar */}
@@ -31,10 +31,10 @@ function HomeScreen() {
             without needing a coach next to you for every session.
           </p>
 
-          {/* Login button (visual only for now) */}
-          <button className="primary-btn login-wide">
-            Login to Start Your Progress
-          </button>
+      {/* Login button */}
+      <button className="primary-btn login-wide" onClick={onLoginClick}>
+        Login to Start Your Progress
+      </button>
 
           <p className="hero-note">Ready when you are 💪</p>
         </div>
@@ -90,7 +90,8 @@ function HomeScreen() {
       </section>
 
       <footer className="footer">
-        <p>© {new Date().getFullYear()} Tech-nique · Built with React</p>
+        <p>© {new Date().getFullYear()} Tech-nique · Created by Rom Levi &amp;
+        Ofek Daniel</p>
       </footer>
     </div>
   );
