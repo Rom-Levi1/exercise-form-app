@@ -3,7 +3,7 @@ import React from "react";
 import "../App.css";
 import "./Homepage.css";
 
-function HomeScreen({ onLoginClick, onLogoClick }) {
+function HomePage({ onLoginClick, onLogoClick, onUploadClick }) {
   return (
     <div className="app">
       {/* Top bar */}
@@ -15,7 +15,13 @@ function HomeScreen({ onLoginClick, onLogoClick }) {
           <a href="#how-it-works">How it works</a>
           <a href="#features">Features</a>
           <a href="#about">About</a>
+
+          {/* TEMPORARY DEV BUTTON – GOES TO UPLOAD PAGE */}
+          <button className="temp-upload-btn" onClick={onUploadClick}>
+            Upload Page
+          </button>
         </nav>
+
       </header>
 
       {/* Hero / Login section */}
@@ -99,4 +105,4 @@ function HomeScreen({ onLoginClick, onLogoClick }) {
   );
 }
 
-export default HomeScreen;
+export default HomePage;

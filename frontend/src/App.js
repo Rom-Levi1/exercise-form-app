@@ -1,20 +1,40 @@
 // src/App.js
-import React, { useState } from "react";
-import "./App.css";
+import React from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
 
-import HomeScreen from "./Homepage/Homepage";
-import AuthPage from "./AuthPage/AuthPage";
+import HomePage from "./Homepage/Homepage.jsx";
+import AuthPage from "./AuthPage/AuthPage.jsx";
+import UploadPage from "./UploadPage/UploadPage.jsx";
 
 function App() {
-  const [showAuth, setShowAuth] = useState(false);
+  const navigate = useNavigate();
 
-  return showAuth ? (
-    <AuthPage onBackClick={() => setShowAuth(false)} />
-  ) : (
-    <HomeScreen
-      onLoginClick={() => setShowAuth(true)}
-      onLogoClick={() => setShowAuth(false)}
-    />
+  return (
+    <Routes>
+      {/* Home */}
+      <Route
+        path="/"
+        element={
+          <HomePage
+            onLoginClick={() => navigate("/auth")}
+            onLogoClick={() => navigate("/")}
+            onUploadClick={() => navigate("/upload")} // 👈 new
+          />
+        }
+      />
+
+      {/* Auth (even if not fully implemented yet) */}
+      <Route
+        path="/auth"
+        element={<AuthPage onLogoClick={() => navigate("/")} />}
+      />
+
+      {/* Upload – our new empty page */}
+      <Route
+        path="/upload"
+        element={<UploadPage onLogoClick={() => navigate("/")} />}
+      />
+    </Routes>
   );
 }
 

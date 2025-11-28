@@ -1,0 +1,13 @@
+/* src/UploadPage/UploadPage.css */
+
+.upload-page {
+  background-color: #080a1f; /* navy blue, same vibe as homepage */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* empty center area for future content */
+.upload-main {
+  flex: 1;
+}

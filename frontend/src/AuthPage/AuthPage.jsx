@@ -2,7 +2,7 @@
 import { useState } from "react";
 import "./AuthPage.css";
 
-function AuthPage({ onBackClick }) {
+function AuthPage({ onLogoClick }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
 
   const handleSubmit = (e) => {
@@ -17,7 +17,7 @@ function AuthPage({ onBackClick }) {
       <header className="auth-header">
         <div
           className="logo clickable-logo"
-          onClick={onBackClick}
+          onClick={onLogoClick} 
         >
           Tech-nique
         </div>
