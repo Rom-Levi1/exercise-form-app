@@ -1,0 +1,70 @@
+{
+  "exercise": "bench_front",
+  "status": "success",
+  "message": "Front bench press analysis completed.",
+  "repCount": 5,
+  "summaryScore": 1.0,
+  "issues": [
+    {
+      "code": "grip_width_out_of_range",
+      "message": "Grip width ratio looks off (avg=1.92). Aim for 1.0\u20131.5\u00d7 shoulder width.",
+      "severity": "low"
+    }
+  ],
+  "repFeedback": [
+    {
+      "repIndex": 1,
+      "romOk": true,
+      "symmetryOk": true,
+      "symmetryBadRatio": 0.0,
+      "barCenteredOk": true,
+      "midXDrift": 0.005
+    },
+    {
+      "repIndex": 2,
+      "romOk": true,
+      "symmetryOk": true,
+      "symmetryBadRatio": 0.053,
+      "barCenteredOk": true,
+      "midXDrift": 0.005
+    },
+    {
+      "repIndex": 3,
+      "romOk": true,
+      "symmetryOk": true,
+      "symmetryBadRatio": 0.132,
+      "barCenteredOk": true,
+      "midXDrift": 0.003
+    },
+    {
+      "repIndex": 4,
+      "romOk": true,
+      "symmetryOk": true,
+      "symmetryBadRatio": 0.111,
+      "barCenteredOk": true,
+      "midXDrift": 0.004
+    },
+    {
+      "repIndex": 5,
+      "romOk": true,
+      "symmetryOk": true,
+      "symmetryBadRatio": 0.051,
+      "barCenteredOk": true,
+      "midXDrift": 0.003
+    }
+  ],
+  "metrics": {
+    "topAngleDeg": 155.0,
+    "bottomAngleDeg": 95.0,
+    "holdFrames": 4,
+    "gripMinRatio": 1.0,
+    "gripMaxRatio": 1.5,
+    "wristYDiffWarn": 0.04,
+    "elbowAngleDiffWarn": 15.0,
+    "midXDriftWarn": 0.06,
+    "gripRatioAvg": 1.92,
+    "wristYDiffAvg": 0.0114,
+    "elbowAngleDiffAvg": 5.12
+  },
+  "warnings": []
+}
