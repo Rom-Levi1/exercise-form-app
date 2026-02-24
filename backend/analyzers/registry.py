@@ -1,12 +1,19 @@
 from typing import Dict, Type
 
 
-# Lazy-ish imports with fallback so the registry file can exist before all analyzers are implemented
+# Squat (angle-specific analyzers)
 try:
-    from backend.analyzers.legs.squat_analyzer import SquatAnalyzer
+    from backend.analyzers.legs.squat.side_squat_analyzer import SideSquatAnalyzer
 except Exception:
-    SquatAnalyzer = None
+    SideSquatAnalyzer = None
 
+try:
+    from backend.analyzers.legs.squat.front_squat_analyzer import FrontSquatAnalyzer
+except Exception:
+    FrontSquatAnalyzer = None
+
+
+# Other analyzers (as they are implemented)
 try:
     from backend.analyzers.legs.lunge_analyzer import LungeAnalyzer
 except Exception:
@@ -26,9 +33,14 @@ except Exception:
 def _buildRegistry() -> Dict[str, Type]:
     registry: Dict[str, Type] = {}
 
-    if SquatAnalyzer is not None:
-        registry["squat"] = SquatAnalyzer
+    # Temporary explicit keys for angle-based squat analyzers
+    if SideSquatAnalyzer is not None:
+        registry["squat_side"] = SideSquatAnalyzer
 
+    if FrontSquatAnalyzer is not None:
+        registry["squat_front"] = FrontSquatAnalyzer
+
+    # Other exercises
     if LungeAnalyzer is not None:
         registry["lunge"] = LungeAnalyzer
 
