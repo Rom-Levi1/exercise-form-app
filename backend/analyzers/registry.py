@@ -13,9 +13,14 @@ except Exception:
     LungeAnalyzer = None
 
 try:
-    from backend.analyzers.chest.bench_press_analyzer import BenchPressAnalyzer
+    from backend.analyzers.chest.bench_press.front_bench_press_analyzer import FrontBenchPressAnalyzer
 except Exception:
-    BenchPressAnalyzer = None
+    FrontBenchPressAnalyzer = None
+
+try:
+    from backend.analyzers.chest.bench_press.side_bench_press_analyzer import SideBenchPressAnalyzer
+except Exception:
+    SideBenchPressAnalyzer = None
 
 try:
     from backend.analyzers.chest.pushup_analyzer import PushupAnalyzer
@@ -32,8 +37,11 @@ def _buildRegistry() -> Dict[str, Type]:
     if LungeAnalyzer is not None:
         registry["lunge"] = LungeAnalyzer
 
-    if BenchPressAnalyzer is not None:
-        registry["bench_press"] = BenchPressAnalyzer
+    if FrontBenchPressAnalyzer is not None:
+        registry["bench_front"] = FrontBenchPressAnalyzer
+
+    if SideBenchPressAnalyzer is not None:
+        registry["bench_side"] = SideBenchPressAnalyzer
 
     if PushupAnalyzer is not None:
         registry["pushup"] = PushupAnalyzer
