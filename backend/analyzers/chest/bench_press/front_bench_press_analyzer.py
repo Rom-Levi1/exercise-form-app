@@ -12,6 +12,7 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
       - Wrist height symmetry (bar tilt)
       - Elbow angle symmetry
       - Bar center drift (wrist midpoint x drift)
+      - ROM validation per rep (min/max elbow angle and ROM range)
     """
 
     def __init__(self):
@@ -34,12 +35,19 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
         HOLD_FRAMES = int(options.get("holdFrames", 4))
 
         # ---------------------------
+        # ROM validation thresholds
+        # ---------------------------
+        MIN_ROM_DEG = float(options.get("minRomDeg", 60))
+        BOTTOM_MARGIN = float(options.get("bottomMarginDeg", 5))
+        TOP_MARGIN = float(options.get("topMarginDeg", 5))
+
+        # ---------------------------
         # Front-view form thresholds
         # ---------------------------
         GRIP_MIN = float(options.get("gripMinRatio", 1.0))
         GRIP_MAX = float(options.get("gripMaxRatio", 1.5))
 
-        WRIST_Y_DIFF_WARN = float(options.get("wristYDiffWarn", 0.04))      # normalized y
+        WRIST_Y_DIFF_WARN = float(options.get("wristYDiffWarn", 0.04))       # normalized y
         ELBOW_ANGLE_DIFF_WARN = float(options.get("elbowAngleDiffWarn", 15)) # degrees
         MID_X_DRIFT_WARN = float(options.get("midXDriftWarn", 0.06))         # normalized x drift per rep
 
@@ -82,6 +90,10 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
         rep_bad_sym_frames = 0
         rep_mid_x_min = None
         rep_mid_x_max = None
+
+        # NEW: per-rep ROM tracking
+        rep_elbow_min = None
+        rep_elbow_max = None
 
         # ---------------------------
         # Main loop over frames
@@ -146,6 +158,10 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
                         rep_bad_sym_frames = 0
                         rep_mid_x_min = mid_x
                         rep_mid_x_max = mid_x
+
+                        # NEW: init ROM trackers
+                        rep_elbow_min = elbow_angle
+                        rep_elbow_max = elbow_angle
                 else:
                     bottomHold = 0
 
@@ -156,6 +172,10 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
 
                 rep_mid_x_min = mid_x if rep_mid_x_min is None else min(rep_mid_x_min, mid_x)
                 rep_mid_x_max = mid_x if rep_mid_x_max is None else max(rep_mid_x_max, mid_x)
+
+                # NEW: update ROM trackers
+                rep_elbow_min = elbow_angle if rep_elbow_min is None else min(rep_elbow_min, elbow_angle)
+                rep_elbow_max = elbow_angle if rep_elbow_max is None else max(rep_elbow_max, elbow_angle)
 
                 if elbow_angle > TOP_ANGLE:
                     topHold += 1
@@ -168,14 +188,29 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
                         bad_sym_ratio = (rep_bad_sym_frames / rep_total_frames) if rep_total_frames > 0 else 0.0
                         drift = (rep_mid_x_max - rep_mid_x_min) if (rep_mid_x_min is not None and rep_mid_x_max is not None) else 0.0
 
+                        # NEW: ROM checks for this rep
+                        rom = (rep_elbow_max - rep_elbow_min) if (rep_elbow_min is not None and rep_elbow_max is not None) else 0.0
+                        hit_bottom = (rep_elbow_min is not None) and (rep_elbow_min <= (BOTTOM_ANGLE + BOTTOM_MARGIN))
+                        hit_top = (rep_elbow_max is not None) and (rep_elbow_max >= (TOP_ANGLE - TOP_MARGIN))
+                        rom_ok = hit_bottom and hit_top and (rom >= MIN_ROM_DEG)
+
                         repFeedback.append({
                             "repIndex": repCount,
-                            "romOk": True,
+                            "romOk": rom_ok,
+                            "romDeg": round(rom, 1),
+                            "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
+                            "maxElbowDeg": None if rep_elbow_max is None else round(rep_elbow_max, 1),
+                            "hitBottom": hit_bottom,
+                            "hitTop": hit_top,
                             "symmetryOk": bad_sym_ratio < 0.25,
                             "symmetryBadRatio": round(bad_sym_ratio, 3),
                             "barCenteredOk": drift < MID_X_DRIFT_WARN,
                             "midXDrift": round(drift, 3),
                         })
+
+                        # Reset ROM trackers for safety (next rep init happens on TOP->DOWN)
+                        rep_elbow_min = None
+                        rep_elbow_max = None
                 else:
                     topHold = 0
 
@@ -217,14 +252,20 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
                 severity="low"
             ))
 
-        # score: fraction of reps passing both symmetry + centering
-        good_reps = sum(1 for r in repFeedback if r.get("symmetryOk") and r.get("barCenteredOk"))
+        # score: fraction of reps passing ROM + symmetry + centering
+        good_reps = sum(1 for r in repFeedback if r.get("romOk") and r.get("symmetryOk") and r.get("barCenteredOk"))
         summaryScore = (good_reps / repCount) if repCount > 0 else None
 
         metrics = {
             "topAngleDeg": TOP_ANGLE,
             "bottomAngleDeg": BOTTOM_ANGLE,
             "holdFrames": HOLD_FRAMES,
+
+            # NEW: ROM metrics thresholds
+            "minRomDeg": MIN_ROM_DEG,
+            "bottomMarginDeg": BOTTOM_MARGIN,
+            "topMarginDeg": TOP_MARGIN,
+
             "gripMinRatio": GRIP_MIN,
             "gripMaxRatio": GRIP_MAX,
             "wristYDiffWarn": WRIST_Y_DIFF_WARN,
