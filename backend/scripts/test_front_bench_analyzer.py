@@ -45,12 +45,15 @@ def main():
         poseFrames=poseFrames,
         videoMetadata=videoMetadata,
         options={
-            # --- Rep/ROM proxy thresholds ---
             "topAngleDeg": 155,
             "bottomAngleDeg": 95,
             "holdFrames": 4,
 
-            # --- Front-view checks ---
+            # NEW: ROM validation
+            "minRomDeg": 60,
+            "bottomMarginDeg": 5,
+            "topMarginDeg": 5,
+
             "gripMinRatio": 1.0,
             "gripMaxRatio": 1.5,
             "wristYDiffWarn": 0.04,
