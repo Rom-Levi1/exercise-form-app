@@ -25,6 +25,12 @@ except Exception:
     SideBenchPressAnalyzer = None
 
 
+# Pull-up analyzers
+try:
+    from backend.analyzers.back.pull_up_analyzer import PullUpAnalyzer
+except Exception:
+    PullUpAnalyzer = None
+
 # Shoulder press analyzers
 try:
     from backend.analyzers.shoulders.shoulder_press.front_shoulder_press_analyzer import (
@@ -49,6 +55,9 @@ def _buildRegistry() -> Dict[str, Type]:
     if SideBenchPressAnalyzer is not None:
         registry["bench_side"] = SideBenchPressAnalyzer
 
+    if PullUpAnalyzer is not None:
+        registry["pullup_back"] = PullUpAnalyzer
+        
     if FrontShoulderPressAnalyzer is not None:
         registry["shoulder_press_front"] = FrontShoulderPressAnalyzer
 

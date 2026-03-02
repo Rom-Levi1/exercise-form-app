@@ -1,0 +1,101 @@
+{
+  "exercise": "pullup_back",
+  "status": "success",
+  "message": "Back pull-up analysis completed.",
+  "repCount": 6,
+  "summaryScore": 0.7883333333333334,
+  "issues": [],
+  "repFeedback": [
+    {
+      "repIndex": 1,
+      "heightOk": true,
+      "elbowDegAtTop": 99.3,
+      "armpitDegAtTop": 121.5,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": true,
+      "wristShoulderRangeLeft": 0.0108,
+      "wristShoulderRangeRight": 0.016,
+      "wristShoulderRangeSimilarity": 0.804,
+      "symmetryScore": 0.804
+    },
+    {
+      "repIndex": 2,
+      "heightOk": true,
+      "elbowDegAtTop": 98.9,
+      "armpitDegAtTop": 120.7,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": false,
+      "wristShoulderRangeLeft": 0.0073,
+      "wristShoulderRangeRight": 0.012,
+      "wristShoulderRangeSimilarity": 0.759,
+      "symmetryScore": 0.759
+    },
+    {
+      "repIndex": 3,
+      "heightOk": true,
+      "elbowDegAtTop": 100.4,
+      "armpitDegAtTop": 122.0,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": false,
+      "wristShoulderRangeLeft": 0.0045,
+      "wristShoulderRangeRight": 0.0136,
+      "wristShoulderRangeSimilarity": 0.493,
+      "symmetryScore": 0.493
+    },
+    {
+      "repIndex": 4,
+      "heightOk": true,
+      "elbowDegAtTop": 100.8,
+      "armpitDegAtTop": 120.6,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": false,
+      "wristShoulderRangeLeft": 0.0095,
+      "wristShoulderRangeRight": 0.0132,
+      "wristShoulderRangeSimilarity": 0.836,
+      "symmetryScore": 0.836
+    },
+    {
+      "repIndex": 5,
+      "heightOk": true,
+      "elbowDegAtTop": 98.8,
+      "armpitDegAtTop": 119.8,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": false,
+      "wristShoulderRangeLeft": 0.0084,
+      "wristShoulderRangeRight": 0.0108,
+      "wristShoulderRangeSimilarity": 0.873,
+      "symmetryScore": 0.873
+    },
+    {
+      "repIndex": 6,
+      "heightOk": true,
+      "elbowDegAtTop": 98.8,
+      "armpitDegAtTop": 119.2,
+      "usedArmpitForTop": false,
+      "angleSymmetryBadAtTop": false,
+      "wristShoulderRangeLeft": 0.0093,
+      "wristShoulderRangeRight": 0.01,
+      "wristShoulderRangeSimilarity": 0.965,
+      "symmetryScore": 0.965
+    }
+  ],
+  "metrics": {
+    "topElbowAngleDeg": 95.0,
+    "topArmpitAngleDeg": 105.0,
+    "leaveTopElbowDeg": 120.0,
+    "hysteresisDeg": 6.0,
+    "smoothWindow": 5,
+    "requireArmpitForHeight": false,
+    "enableAngleSymmetry": true,
+    "symElbowDiffWarnDeg": 18.0,
+    "symArmpitDiffWarnDeg": 18.0,
+    "skippedMissingElbowFrames": 0,
+    "validElbowFrames": 720,
+    "elbowAngleMin": 40.6,
+    "elbowAngleMax": 163.2,
+    "topHitFrames": 496,
+    "leaveTopFrames": 163,
+    "armpitAvailableFrames": 720
+  },
+  "warnings": []
+}
