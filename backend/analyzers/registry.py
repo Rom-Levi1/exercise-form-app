@@ -39,6 +39,14 @@ try:
 except Exception:
     FrontShoulderPressAnalyzer = None
 
+# Tricep extension analyzers
+try:
+    from backend.analyzers.arms.tricep_extension.side_tricep_extension_analyzer import (
+        SideTricepExtensionAnalyzer,
+    )
+except Exception:
+    SideTricepExtensionAnalyzer = None
+
 
 def _buildRegistry() -> Dict[str, Type]:
     registry: Dict[str, Type] = {}
@@ -60,6 +68,9 @@ def _buildRegistry() -> Dict[str, Type]:
         
     if FrontShoulderPressAnalyzer is not None:
         registry["shoulder_press_front"] = FrontShoulderPressAnalyzer
+
+    if SideTricepExtensionAnalyzer is not None:
+        registry["tricep_extension_side"] = SideTricepExtensionAnalyzer
 
     return registry
 
