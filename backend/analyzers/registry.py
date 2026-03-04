@@ -47,6 +47,14 @@ try:
 except Exception:
     SideTricepExtensionAnalyzer = None
 
+# Bicep curl analyzers
+try:
+    from backend.analyzers.arms.bicep_curl.side_bicep_curl_analyzer import (
+        SideBicepCurlAnalyzer,
+    )
+except Exception:
+    SideBicepCurlAnalyzer = None
+
 
 def _buildRegistry() -> Dict[str, Type]:
     registry: Dict[str, Type] = {}
@@ -71,6 +79,9 @@ def _buildRegistry() -> Dict[str, Type]:
 
     if SideTricepExtensionAnalyzer is not None:
         registry["tricep_extension_side"] = SideTricepExtensionAnalyzer
+
+    if SideBicepCurlAnalyzer is not None:
+        registry["bicep_curl_side"] = SideBicepCurlAnalyzer
 
     return registry
 

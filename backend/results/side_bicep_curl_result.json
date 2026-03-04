@@ -1,0 +1,71 @@
+{
+  "exercise": "bicep_curl_side",
+  "status": "success",
+  "message": "Side bicep curl analysis completed.",
+  "repCount": 4,
+  "summaryScore": 1.0,
+  "issues": [],
+  "repFeedback": [
+    {
+      "repIndex": 1,
+      "side": "right",
+      "romOk": true,
+      "romDeg": 93.8,
+      "minElbowDeg": 71.1,
+      "maxElbowDeg": 165.0,
+      "hitTop": true,
+      "hitBottom": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.134
+    },
+    {
+      "repIndex": 2,
+      "side": "right",
+      "romOk": true,
+      "romDeg": 76.1,
+      "minElbowDeg": 73.5,
+      "maxElbowDeg": 149.7,
+      "hitTop": true,
+      "hitBottom": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.123
+    },
+    {
+      "repIndex": 3,
+      "side": "right",
+      "romOk": true,
+      "romDeg": 74.3,
+      "minElbowDeg": 72.3,
+      "maxElbowDeg": 146.6,
+      "hitTop": true,
+      "hitBottom": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.109
+    },
+    {
+      "repIndex": 4,
+      "side": "right",
+      "romOk": true,
+      "romDeg": 74.5,
+      "minElbowDeg": 73.4,
+      "maxElbowDeg": 147.9,
+      "hitTop": true,
+      "hitBottom": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.105
+    }
+  ],
+  "metrics": {
+    "side": "right",
+    "bottomAngleDeg": 158.0,
+    "topAngleDeg": 68.0,
+    "hysteresisDeg": 6.0,
+    "smoothWindow": 5,
+    "minRomDeg": 70.0,
+    "bottomMarginDeg": 12.0,
+    "topMarginDeg": 8.0,
+    "elbowRelXDriftWarn": 0.27,
+    "elbowRelXDriftAvg": 0.1178
+  },
+  "warnings": []
+}
