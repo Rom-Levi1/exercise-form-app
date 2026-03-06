@@ -10,19 +10,18 @@ if str(projectRoot) not in sys.path:
 
 from backend.core.pose.mediapipe_extractor import extract_pose_frames  # noqa: E402
 from backend.analyzers.legs.squat.side_squat_analyzer import SideSquatAnalyzer  # noqa: E402
+from backend.core.video.squat_feedback_video import create_squat_feedback_video  # noqa: E402
 
 
 def main():
     if len(sys.argv) < 2:
-        print(
-            "Usage: python backend/scripts/test_side_squat_analyzer.py <video_path> "
-            "[left|right] [output_json_path]"
-        )
+        print("Usage: python backend/scripts/test_side_squat_analyzer.py <video_path> [left|right] [output_json_path] [output_video_path]")
         return
 
     videoPath = sys.argv[1]
     side = sys.argv[2] if len(sys.argv) >= 3 else "left"
     outputPathArg = sys.argv[3] if len(sys.argv) >= 4 else None
+    outputVideoPathArg = sys.argv[4] if len(sys.argv) >= 5 else None
 
     if outputPathArg is None:
         outputDir = projectRoot / "backend" / "results"
@@ -33,6 +32,14 @@ def main():
         if not outputPath.is_absolute():
             outputPath = projectRoot / outputPath
         outputPath.parent.mkdir(parents=True, exist_ok=True)
+
+    if outputVideoPathArg is None:
+        outputVideoPath = outputPath.with_name("side_squat_feedback.mp4")
+    else:
+        outputVideoPath = Path(outputVideoPathArg)
+        if not outputVideoPath.is_absolute():
+            outputVideoPath = projectRoot / outputVideoPath
+        outputVideoPath.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Running side squat analyzer on: {videoPath}")
     print(f"Leg side preference: {side}")
@@ -52,6 +59,14 @@ def main():
     with open(outputPath, "w", encoding="utf-8") as jsonFile:
         json.dump(result, jsonFile, indent=2)
 
+    annotatedVideoPath = create_squat_feedback_video(
+        videoPath=videoPath,
+        poseFrames=poseFrames,
+        analysisResult=result,
+        outputPath=str(outputVideoPath),
+        pauseSeconds=2.0,
+    )
+
     print("\n=== Side Squat Analyzer Summary ===")
     print(f"Saved JSON result to: {outputPath}")
     print(f"Status: {result.get('status')}")
@@ -59,6 +74,7 @@ def main():
     print(f"Summary score: {result.get('summaryScore')}")
     print(f"Top-level issues: {[issue.get('code') for issue in result.get('issues', [])]}")
     print(f"Warnings: {result.get('warnings', [])}")
+    print(f"Annotated video: {annotatedVideoPath or 'Failed to generate'}")
 
 
 if __name__ == "__main__":

@@ -87,6 +87,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
         perRepBottomKneeAngles: List[float] = []
         perRepMaxTorsoLeanAngles: List[float] = []
         perRepTopKneeAnglesAfterAscent: List[float] = []
+        visualEvents: List[Dict[str, Any]] = []
 
         depthIssueCount = 0
         torsoIssueCount = 0
@@ -131,10 +132,34 @@ class SideSquatAnalyzer(BaseAnalyzer):
                     repIssuesCodes.append("depth_high")
                     repQualityPenalties += 20
                     depthIssueCount += 1
+                    visualEvents.append(
+                        {
+                            "type": "depth_high",
+                            "message": "Not deep enough in this rep.",
+                            "severity": "high",
+                            "frameIndex": bottomFrame,
+                            "rep": repIndex,
+                            "measuredAngleDeg": round(repBottomKneeAngle, 2),
+                            "targetAngleDeg": 95.0,
+                            "joint": "knee",
+                        }
+                    )
                 elif repBottomKneeAngle > 95:
                     repIssuesCodes.append("depth_moderate")
                     repQualityPenalties += 10
                     depthIssueCount += 1
+                    visualEvents.append(
+                        {
+                            "type": "depth_moderate",
+                            "message": "Depth was a bit shallow in this rep.",
+                            "severity": "medium",
+                            "frameIndex": bottomFrame,
+                            "rep": repIndex,
+                            "measuredAngleDeg": round(repBottomKneeAngle, 2),
+                            "targetAngleDeg": 95.0,
+                            "joint": "knee",
+                        }
+                    )
 
             # --- Torso lean (per rep max lean from vertical) ---
             # Angle from vertical: higher means more forward lean.
@@ -144,10 +169,34 @@ class SideSquatAnalyzer(BaseAnalyzer):
                     repIssuesCodes.append("torso_lean_excessive")
                     repQualityPenalties += 15
                     torsoIssueCount += 1
+                    visualEvents.append(
+                        {
+                            "type": "torso_lean_excessive",
+                            "message": "Too much forward torso lean.",
+                            "severity": "high",
+                            "frameIndex": bottomFrame,
+                            "rep": repIndex,
+                            "measuredAngleDeg": round(repMaxTorsoLean, 2),
+                            "targetAngleDeg": 35.0,
+                            "joint": "torso",
+                        }
+                    )
                 elif repMaxTorsoLean > 35:
                     repIssuesCodes.append("torso_lean_moderate")
                     repQualityPenalties += 8
                     torsoIssueCount += 1
+                    visualEvents.append(
+                        {
+                            "type": "torso_lean_moderate",
+                            "message": "Moderate forward torso lean.",
+                            "severity": "medium",
+                            "frameIndex": bottomFrame,
+                            "rep": repIndex,
+                            "measuredAngleDeg": round(repMaxTorsoLean, 2),
+                            "targetAngleDeg": 35.0,
+                            "joint": "torso",
+                        }
+                    )
 
             # --- Lockout at top (after ascent) ---
             # If they never get close to straight knees near the top, may be incomplete lockout.
@@ -156,6 +205,18 @@ class SideSquatAnalyzer(BaseAnalyzer):
                     repIssuesCodes.append("lockout_incomplete")
                     repQualityPenalties += 12
                     lockoutIssueCount += 1
+                    visualEvents.append(
+                        {
+                            "type": "lockout_incomplete",
+                            "message": "Incomplete knee lockout at top.",
+                            "severity": "medium",
+                            "frameIndex": endFrame,
+                            "rep": repIndex,
+                            "measuredAngleDeg": round(repTopKneeAngleAfterAscent, 2),
+                            "targetAngleDeg": 155.0,
+                            "joint": "knee",
+                        }
+                    )
 
             repQuality = max(0.0, min(100.0, 100.0 - repQualityPenalties))
 
@@ -238,6 +299,9 @@ class SideSquatAnalyzer(BaseAnalyzer):
 
         metrics = {
             "view": "side",
+            "visualFeedback": {
+                "events": visualEvents,
+            },
             "signalQuality": {
                 "totalFrames": totalFrames,
                 "validKneeAngleFrames": validKneeAngleFrames,
