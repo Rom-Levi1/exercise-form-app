@@ -16,6 +16,8 @@ class SideSquatAnalyzer(BaseAnalyzer):
 
     def __init__(self):
         super().__init__("squat")
+        self._frameWidth = 1.0
+        self._frameHeight = 1.0
 
     def analyze(
         self,
@@ -29,6 +31,8 @@ class SideSquatAnalyzer(BaseAnalyzer):
 
         options = options or {}
         sidePreference = options.get("side", "left")  # "left" or "right"
+        self._frameWidth = float((videoMetadata or {}).get("width") or 1.0)
+        self._frameHeight = float((videoMetadata or {}).get("height") or 1.0)
 
         # Signals across all frames
         kneeAngles: List[Optional[float]] = []
@@ -128,7 +132,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
             # Lower bottom knee angle generally means deeper squat.
             # These thresholds are rough and should be tuned with your data.
             if repBottomKneeAngle is not None:
-                if repBottomKneeAngle > 110:
+                if repBottomKneeAngle > 100:
                     repIssuesCodes.append("depth_high")
                     repQualityPenalties += 20
                     depthIssueCount += 1
@@ -140,11 +144,11 @@ class SideSquatAnalyzer(BaseAnalyzer):
                             "frameIndex": bottomFrame,
                             "rep": repIndex,
                             "measuredAngleDeg": round(repBottomKneeAngle, 2),
-                            "targetAngleDeg": 95.0,
+                            "targetAngleDeg": 85.0,
                             "joint": "knee",
                         }
                     )
-                elif repBottomKneeAngle > 95:
+                elif repBottomKneeAngle > 85:
                     repIssuesCodes.append("depth_moderate")
                     repQualityPenalties += 10
                     depthIssueCount += 1
@@ -156,7 +160,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
                             "frameIndex": bottomFrame,
                             "rep": repIndex,
                             "measuredAngleDeg": round(repBottomKneeAngle, 2),
-                            "targetAngleDeg": 95.0,
+                            "targetAngleDeg": 85.0,
                             "joint": "knee",
                         }
                     )
@@ -165,7 +169,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
             # Angle from vertical: higher means more forward lean.
             # This is a heuristic and should be tuned.
             if repMaxTorsoLean is not None:
-                if repMaxTorsoLean > 45:
+                if repMaxTorsoLean > 55:
                     repIssuesCodes.append("torso_lean_excessive")
                     repQualityPenalties += 15
                     torsoIssueCount += 1
@@ -177,11 +181,11 @@ class SideSquatAnalyzer(BaseAnalyzer):
                             "frameIndex": bottomFrame,
                             "rep": repIndex,
                             "measuredAngleDeg": round(repMaxTorsoLean, 2),
-                            "targetAngleDeg": 35.0,
+                            "targetAngleDeg": 45.0,
                             "joint": "torso",
                         }
                     )
-                elif repMaxTorsoLean > 35:
+                elif repMaxTorsoLean > 45:
                     repIssuesCodes.append("torso_lean_moderate")
                     repQualityPenalties += 8
                     torsoIssueCount += 1
@@ -193,7 +197,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
                             "frameIndex": bottomFrame,
                             "rep": repIndex,
                             "measuredAngleDeg": round(repMaxTorsoLean, 2),
-                            "targetAngleDeg": 35.0,
+                            "targetAngleDeg": 45.0,
                             "joint": "torso",
                         }
                     )
@@ -383,8 +387,10 @@ class SideSquatAnalyzer(BaseAnalyzer):
         if shoulder is None or hip is None:
             return None
 
-        dx = shoulder.x - hip.x
-        dy = shoulder.y - hip.y
+        # Landmarks are normalized independently by frame width/height.
+        # Convert to pixel-space deltas so the angle is not skewed by aspect ratio.
+        dx = (shoulder.x - hip.x) * self._frameWidth
+        dy = (shoulder.y - hip.y) * self._frameHeight
 
         # If both are same point / unusable
         if dx == 0 and dy == 0:
@@ -430,7 +436,7 @@ class SideSquatAnalyzer(BaseAnalyzer):
         repWindows: List[Dict[str, int]] = []
 
         topThreshold = 155.0
-        bottomThreshold = 115.0
+        bottomThreshold = 105.0
 
         state = "top"
         repStartFrameIndex: Optional[int] = None

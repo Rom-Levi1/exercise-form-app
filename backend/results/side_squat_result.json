@@ -2,102 +2,220 @@
   "exercise": "squat",
   "status": "success",
   "message": "Side-view squat analysis completed (depth + torso lean + lockout checks).",
-  "repCount": 2,
-  "summaryScore": 76.5,
-  "issues": [
-    {
-      "code": "torso_lean_issue",
-      "message": "Forward torso lean was elevated in 2/2 rep(s).",
-      "severity": "medium"
-    },
-    {
-      "code": "lockout_issue",
-      "message": "Top lockout looked incomplete in 2/2 rep(s).",
-      "severity": "medium"
-    }
-  ],
+  "repCount": 8,
+  "summaryScore": 100.0,
+  "issues": [],
   "repFeedback": [
     {
       "rep": 1,
-      "quality": 73.0,
-      "issues": [
-        "torso_lean_excessive",
-        "lockout_incomplete"
-      ],
-      "startFrameIndex": 265,
-      "bottomFrameIndex": 272,
-      "endFrameIndex": 326,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 74,
+      "bottomFrameIndex": 79,
+      "endFrameIndex": 140,
       "checks": {
         "depth": {
-          "bottomKneeAngleDeg": 36.44
+          "bottomKneeAngleDeg": 38.84
         },
         "torsoLean": {
-          "maxTorsoLeanFromVerticalDeg": 47.51
+          "maxTorsoLeanFromVerticalDeg": 33.6
         },
         "lockout": {
-          "topKneeAngleAfterAscentDeg": 159.84
+          "topKneeAngleAfterAscentDeg": 158.98
         }
       }
     },
     {
       "rep": 2,
-      "quality": 80.0,
-      "issues": [
-        "torso_lean_moderate",
-        "lockout_incomplete"
-      ],
-      "startFrameIndex": 377,
-      "bottomFrameIndex": 383,
-      "endFrameIndex": 438,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 211,
+      "bottomFrameIndex": 217,
+      "endFrameIndex": 271,
       "checks": {
         "depth": {
-          "bottomKneeAngleDeg": 39.13
+          "bottomKneeAngleDeg": 35.65
         },
         "torsoLean": {
-          "maxTorsoLeanFromVerticalDeg": 44.29
+          "maxTorsoLeanFromVerticalDeg": 35.53
         },
         "lockout": {
-          "topKneeAngleAfterAscentDeg": 159.29
+          "topKneeAngleAfterAscentDeg": 162.49
+        }
+      }
+    },
+    {
+      "rep": 3,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 353,
+      "bottomFrameIndex": 360,
+      "endFrameIndex": 415,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 34.96
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 36.19
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 157.74
+        }
+      }
+    },
+    {
+      "rep": 4,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 518,
+      "bottomFrameIndex": 524,
+      "endFrameIndex": 579,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 32.58
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 35.31
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 160.14
+        }
+      }
+    },
+    {
+      "rep": 5,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 640,
+      "bottomFrameIndex": 645,
+      "endFrameIndex": 703,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 31.78
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 36.28
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 162.63
+        }
+      }
+    },
+    {
+      "rep": 6,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 761,
+      "bottomFrameIndex": 766,
+      "endFrameIndex": 824,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 34.59
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 35.68
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 158.19
+        }
+      }
+    },
+    {
+      "rep": 7,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 918,
+      "bottomFrameIndex": 924,
+      "endFrameIndex": 975,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 33.68
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 35.88
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 162.63
+        }
+      }
+    },
+    {
+      "rep": 8,
+      "quality": 100.0,
+      "issues": [],
+      "startFrameIndex": 1066,
+      "bottomFrameIndex": 1072,
+      "endFrameIndex": 1124,
+      "checks": {
+        "depth": {
+          "bottomKneeAngleDeg": 34.22
+        },
+        "torsoLean": {
+          "maxTorsoLeanFromVerticalDeg": 36.04
+        },
+        "lockout": {
+          "topKneeAngleAfterAscentDeg": 161.26
         }
       }
     }
   ],
   "metrics": {
     "view": "side",
+    "visualFeedback": {
+      "events": []
+    },
     "signalQuality": {
-      "totalFrames": 517,
-      "validKneeAngleFrames": 503,
-      "validKneeAngleRatio": 0.9729,
-      "validTorsoLeanFrames": 503,
-      "validTorsoLeanRatio": 0.9729
+      "totalFrames": 1160,
+      "validKneeAngleFrames": 1160,
+      "validKneeAngleRatio": 1.0,
+      "validTorsoLeanFrames": 1160,
+      "validTorsoLeanRatio": 1.0
     },
     "globalSignals": {
       "kneeAngleDeg": {
-        "min": 31.8,
+        "min": 31.55,
         "max": 180.0,
-        "avg": 148.4
+        "avg": 129.56
       },
       "torsoLeanFromVerticalDeg": {
-        "min": 0.03,
-        "max": 48.05,
-        "avg": 15.17
+        "min": 0.0,
+        "max": 36.53,
+        "avg": 13.87
       }
     },
     "repCheckSummary": {
       "depthIssueCount": 0,
-      "torsoLeanIssueCount": 2,
-      "lockoutIssueCount": 2,
+      "torsoLeanIssueCount": 0,
+      "lockoutIssueCount": 0,
       "perRepBottomKneeAnglesDeg": [
-        36.44,
-        39.13
+        38.84,
+        35.65,
+        34.96,
+        32.58,
+        31.78,
+        34.59,
+        33.68,
+        34.22
       ],
       "perRepMaxTorsoLeanFromVerticalDeg": [
-        47.51,
-        44.29
+        33.6,
+        35.53,
+        36.19,
+        35.31,
+        36.28,
+        35.68,
+        35.88,
+        36.04
       ],
       "perRepTopKneeAnglesAfterAscentDeg": [
-        159.84,
-        159.29
+        158.98,
+        162.49,
+        157.74,
+        160.14,
+        162.63,
+        158.19,
+        162.63,
+        161.26
       ]
     }
   },
