@@ -64,7 +64,7 @@ def main():
         poseFrames=poseFrames,
         analysisResult=result,
         outputPath=str(outputVideoPath),
-        pauseSeconds=2.0,
+        pauseSeconds=4.0,
     )
 
     print("\n=== Side Squat Analyzer Summary ===")
