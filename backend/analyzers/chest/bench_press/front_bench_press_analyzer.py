@@ -94,6 +94,7 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
         # NEW: per-rep ROM tracking
         rep_elbow_min = None
         rep_elbow_max = None
+        rep_start_frame_index = None
 
         # ---------------------------
         # Main loop over frames
@@ -162,6 +163,7 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
                         # NEW: init ROM trackers
                         rep_elbow_min = elbow_angle
                         rep_elbow_max = elbow_angle
+                        rep_start_frame_index = getattr(pf, "frameIndex", None)
                 else:
                     bottomHold = 0
 
@@ -194,23 +196,43 @@ class FrontBenchPressAnalyzer(BaseAnalyzer):
                         hit_top = (rep_elbow_max is not None) and (rep_elbow_max >= (TOP_ANGLE - TOP_MARGIN))
                         rom_ok = hit_bottom and hit_top and (rom >= MIN_ROM_DEG)
 
+                        symmetry_ok = bad_sym_ratio < 0.25
+                        bar_centered_ok = drift < MID_X_DRIFT_WARN
+                        rep_issue_codes = []
+                        quality_penalty = 0.0
+                        if not rom_ok:
+                            rep_issue_codes.append("rom_incomplete")
+                            quality_penalty += 40.0
+                        if not symmetry_ok:
+                            rep_issue_codes.append("press_asymmetry")
+                            quality_penalty += 30.0
+                        if not bar_centered_ok:
+                            rep_issue_codes.append("bar_off_center")
+                            quality_penalty += 30.0
+                        rep_quality = max(0.0, 100.0 - quality_penalty)
+
                         repFeedback.append({
                             "repIndex": repCount,
+                            "startFrameIndex": rep_start_frame_index,
+                            "endFrameIndex": getattr(pf, "frameIndex", None),
+                            "quality": round(rep_quality, 1),
+                            "issues": rep_issue_codes,
                             "romOk": rom_ok,
                             "romDeg": round(rom, 1),
                             "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
                             "maxElbowDeg": None if rep_elbow_max is None else round(rep_elbow_max, 1),
                             "hitBottom": hit_bottom,
                             "hitTop": hit_top,
-                            "symmetryOk": bad_sym_ratio < 0.25,
+                            "symmetryOk": symmetry_ok,
                             "symmetryBadRatio": round(bad_sym_ratio, 3),
-                            "barCenteredOk": drift < MID_X_DRIFT_WARN,
+                            "barCenteredOk": bar_centered_ok,
                             "midXDrift": round(drift, 3),
                         })
 
                         # Reset ROM trackers for safety (next rep init happens on TOP->DOWN)
                         rep_elbow_min = None
                         rep_elbow_max = None
+                        rep_start_frame_index = None
                 else:
                     topHold = 0
 

@@ -10,6 +10,7 @@ from backend.core.pose.mediapipe_extractor import extract_pose_frames  # noqa: E
 from backend.analyzers.chest.bench_press.side_bench_press_analyzer import (  # noqa: E402
     SideBenchPressAnalyzer,
 )
+from backend.core.video.bench_feedback_video import create_bench_feedback_video  # noqa: E402
 
 
 def main():
@@ -21,11 +22,13 @@ def main():
         videoPath = str(defaultVideo)
         side = "left"
         outputPathArg = None
+        outputVideoPathArg = None
         print(f"No video path provided, using default: {videoPath}")
     else:
         videoPath = sys.argv[1]
         side = sys.argv[2].lower() if len(sys.argv) >= 3 else "left"
         outputPathArg = sys.argv[3] if len(sys.argv) >= 4 else None
+        outputVideoPathArg = sys.argv[4] if len(sys.argv) >= 5 else None
 
     # Make relative paths relative to project root
     videoPathP = Path(videoPath)
@@ -36,7 +39,7 @@ def main():
         print(f"ERROR: video file not found: {videoPathP}")
         print(
             "Usage: python backend/scripts/test_side_bench_analyzer.py <video_path> "
-            "[left|right] [output_json_path]"
+            "[left|right] [output_json_path] [output_video_path]"
         )
         return
 
@@ -50,6 +53,14 @@ def main():
         if not outputPath.is_absolute():
             outputPath = projectRoot / outputPath
         outputPath.parent.mkdir(parents=True, exist_ok=True)
+
+    if outputVideoPathArg is None:
+        outputVideoPath = outputPath.with_name(f"side_bench_feedback_{side}.mp4")
+    else:
+        outputVideoPath = Path(outputVideoPathArg)
+        if not outputVideoPath.is_absolute():
+            outputVideoPath = projectRoot / outputVideoPath
+        outputVideoPath.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"Running side bench analyzer on: {videoPathP} (side={side})")
 
@@ -83,6 +94,15 @@ def main():
     with open(outputPath, "w", encoding="utf-8") as jsonFile:
         json.dump(result, jsonFile, indent=2)
 
+    annotatedVideoPath = create_bench_feedback_video(
+        videoPath=str(videoPathP),
+        poseFrames=poseFrames,
+        analysisResult=result,
+        outputPath=str(outputVideoPath),
+        panelTitle="Bench Press",
+        pauseSeconds=4.0,
+    )
+
     print("\n=== Side Bench Analyzer Summary ===")
     print(f"Saved JSON result to: {outputPath}")
     print(f"Status: {result.get('status')}")
@@ -90,6 +110,7 @@ def main():
     print(f"Summary score: {result.get('summaryScore')}")
     print(f"Top-level issues: {[issue.get('code') for issue in result.get('issues', [])]}")
     print(f"Warnings: {result.get('warnings', [])}")
+    print(f"Annotated video: {annotatedVideoPath or 'Failed to generate'}")
 
     reps = result.get("repFeedback", []) or []
     if reps:

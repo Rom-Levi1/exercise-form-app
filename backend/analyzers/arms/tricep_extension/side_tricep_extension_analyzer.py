@@ -84,6 +84,7 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
         rep_elbow_rel_x_max: Optional[float] = None
         rep_upper_arm_angle_min: Optional[float] = None
         rep_upper_arm_angle_max: Optional[float] = None
+        rep_start_frame_index: Optional[int] = None
 
         for pf in poseFrames:
             if not getattr(pf, "hasPose", False):
@@ -117,6 +118,7 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                     rep_elbow_max = elbowAngle
                     rep_elbow_rel_x_min = elbowRelX
                     rep_elbow_rel_x_max = elbowRelX
+                    rep_start_frame_index = getattr(pf, "frameIndex", None)
                     if upperArmAngle is not None:
                         rep_upper_arm_angle_min = float(upperArmAngle)
                         rep_upper_arm_angle_max = float(upperArmAngle)
@@ -128,6 +130,7 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                     rep_elbow_max = elbowAngle
                     rep_elbow_rel_x_min = elbowRelX
                     rep_elbow_rel_x_max = elbowRelX
+                    rep_start_frame_index = getattr(pf, "frameIndex", None)
                     rep_upper_arm_angle_min = (
                         float(upperArmAngle) if upperArmAngle is not None else None
                     )
@@ -194,6 +197,20 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                     else (upperArmAngleDrift < UPPER_ARM_ANGLE_DRIFT_WARN)
                 )
 
+                repIssuesCodes: List[str] = []
+                repQualityPenalty = 0.0
+                if not romOk:
+                    repIssuesCodes.append("rom_incomplete")
+                    repQualityPenalty += 40.0
+                if not elbowStable:
+                    repIssuesCodes.append("elbow_drift")
+                    repQualityPenalty += 30.0
+                if upperArmStable is False:
+                    repIssuesCodes.append("upper_arm_instability")
+                    repQualityPenalty += 30.0
+
+                repQuality = max(0.0, 100.0 - repQualityPenalty)
+
                 rep_elbow_rel_x_drifts.append(elbowRelXDrift)
                 if upperArmAngleDrift is not None:
                     rep_upper_arm_angle_drifts.append(upperArmAngleDrift)
@@ -202,6 +219,10 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                     {
                         "repIndex": repCount,
                         "side": side,
+                        "startFrameIndex": rep_start_frame_index,
+                        "endFrameIndex": getattr(pf, "frameIndex", None),
+                        "quality": round(repQuality, 1),
+                        "issues": repIssuesCodes,
                         "romOk": romOk,
                         "romDeg": round(rom, 1),
                         "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
@@ -225,6 +246,7 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                 rep_elbow_rel_x_max = None
                 rep_upper_arm_angle_min = None
                 rep_upper_arm_angle_max = None
+                rep_start_frame_index = None
 
         elbowRelXDriftAvg = safe_avg(rep_elbow_rel_x_drifts)
         upperArmAngleDriftAvg = safe_avg(rep_upper_arm_angle_drifts)

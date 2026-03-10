@@ -94,6 +94,7 @@ class PullUpAnalyzer(BaseAnalyzer):
         pending_rep: Optional[Dict[str, Any]] = None
         dxL_samples: List[float] = []
         dxR_samples: List[float] = []
+        top_phase_start_frame: Optional[int] = None
 
         # Debug metrics
         skipped_missing_elbow = 0
@@ -183,6 +184,7 @@ class PullUpAnalyzer(BaseAnalyzer):
                 if top_hit:
                     repCount += 1
                     in_top = True
+                    top_phase_start_frame = getattr(pf, "frameIndex", None)
 
                     dxL_samples = []
                     dxR_samples = []
@@ -199,6 +201,7 @@ class PullUpAnalyzer(BaseAnalyzer):
 
                     pending_rep = {
                         "repIndex": repCount,
+                        "startFrameIndex": top_phase_start_frame,
                         "heightOk": bool(height_ok),
                         "elbowDegAtTop": round(elbow_s, 1),
                         "armpitDegAtTop": None if armpit_angle is None else round(float(armpit_angle), 1),
@@ -221,8 +224,17 @@ class PullUpAnalyzer(BaseAnalyzer):
 
                     # neutral if missing data
                     symmetry_score = 1.0 if sim is None else max(0.0, min(1.0, sim))
+                    rep_issue_codes: List[str] = []
+                    if pending_rep is not None and not pending_rep.get("heightOk"):
+                        rep_issue_codes.append("height_incomplete")
+                    if symmetry_score < 0.85 or (pending_rep is not None and pending_rep.get("angleSymmetryBadAtTop")):
+                        rep_issue_codes.append("pull_asymmetry")
+                    rep_quality = 100.0 * (1.0 if pending_rep is not None and pending_rep.get("heightOk") else 0.0) * symmetry_score
 
                     if pending_rep is not None:
+                        pending_rep["endFrameIndex"] = getattr(pf, "frameIndex", None)
+                        pending_rep["quality"] = round(rep_quality, 1)
+                        pending_rep["issues"] = rep_issue_codes
                         pending_rep["wristShoulderRangeLeft"] = None if rangeL is None else round(rangeL, 4)
                         pending_rep["wristShoulderRangeRight"] = None if rangeR is None else round(rangeR, 4)
                         pending_rep["wristShoulderRangeSimilarity"] = None if sim is None else round(sim, 3)
@@ -233,6 +245,7 @@ class PullUpAnalyzer(BaseAnalyzer):
                     pending_rep = None
                     dxL_samples = []
                     dxR_samples = []
+                    top_phase_start_frame = None
 
         # ---------------------------
         # Summaries -> issues

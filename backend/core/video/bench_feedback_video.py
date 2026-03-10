@@ -8,20 +8,22 @@ from backend.core.video.exercise_feedback_video import (
 
 def _issue_code_to_message(issueCode: str) -> str:
     mapping = {
-        "depth_high": "Go deeper at the bottom.",
-        "depth_moderate": "Slightly deeper squat depth.",
-        "torso_lean_excessive": "Keep torso more upright.",
-        "torso_lean_moderate": "Try to reduce forward lean.",
-        "lockout_incomplete": "Finish with full knee lockout.",
+        "rom_incomplete": "Use a fuller range of motion.",
+        "bar_path_drift": "Keep the bar path more consistent.",
+        "wrist_elbow_stacking": "Keep wrists stacked over elbows.",
+        "elbow_tuck_off": "Keep elbow tuck in a better range.",
+        "press_asymmetry": "Press more evenly with both arms.",
+        "bar_off_center": "Keep the bar path centered.",
     }
     return mapping.get(issueCode, issueCode.replace("_", " "))
 
 
-def create_squat_feedback_video(
+def create_bench_feedback_video(
     videoPath: str,
     poseFrames: List[Any],
     analysisResult: Dict[str, Any],
     outputPath: str,
+    panelTitle: str,
     pauseSeconds: float = 4.0,
     minVisibility: float = 0.4,
 ) -> Optional[str]:
@@ -29,14 +31,15 @@ def create_squat_feedback_video(
         analysisResult,
         issueMessageResolver=_issue_code_to_message,
         positiveStatus="Good rep.",
-        positiveDetailLines=["Depth, torso angle, and lockout looked good."],
+        positiveDetailLines=["Range of motion and rep control looked good."],
+        repKeyCandidates=("repIndex", "rep"),
     )
 
     return create_exercise_feedback_video(
         videoPath=videoPath,
         poseFrames=poseFrames,
         outputPath=outputPath,
-        panelTitle="Squats",
+        panelTitle=panelTitle,
         repSummaries=repSummaries,
         pauseSeconds=pauseSeconds,
         minVisibility=minVisibility,

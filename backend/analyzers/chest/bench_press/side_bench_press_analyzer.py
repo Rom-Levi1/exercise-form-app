@@ -117,6 +117,7 @@ class SideBenchPressAnalyzer(BaseAnalyzer):
 
         rep_tuck_min = None
         rep_tuck_max = None
+        rep_start_frame_index = None
 
         # ---------------------------
         # Main loop
@@ -154,6 +155,9 @@ class SideBenchPressAnalyzer(BaseAnalyzer):
                     rep_bar_rel_x_max = bar_rel_x
                     rep_elbow_min = elbow_angle
                     rep_elbow_max = elbow_angle
+                    rep_tuck_min = float(tuck_angle) if tuck_angle is not None else None
+                    rep_tuck_max = float(tuck_angle) if tuck_angle is not None else None
+                    rep_start_frame_index = getattr(pf, "frameIndex", None)
 
             # stacking proxy
             wrist_elbow_x_diff = abs(wr[0] - el[0])
@@ -189,6 +193,7 @@ class SideBenchPressAnalyzer(BaseAnalyzer):
 
                     rep_tuck_min = float(tuck_angle) if tuck_angle is not None else None
                     rep_tuck_max = float(tuck_angle) if tuck_angle is not None else None
+                    rep_start_frame_index = getattr(pf, "frameIndex", None)
 
             else:  # DOWN_IN_REP
                 rep_total_frames += 1
@@ -244,10 +249,31 @@ class SideBenchPressAnalyzer(BaseAnalyzer):
                         )
                         tuck_ok = (tuck_avg is not None) and (TUCK_MIN_DEG <= tuck_avg <= TUCK_MAX_DEG)
 
+                    rep_issue_codes = []
+                    quality_penalty = 0.0
+                    if not rom_ok:
+                        rep_issue_codes.append("rom_incomplete")
+                        quality_penalty += 40.0
+                    if not bar_path_ok:
+                        rep_issue_codes.append("bar_path_drift")
+                        quality_penalty += 30.0
+                    if not stacking_ok:
+                        rep_issue_codes.append("wrist_elbow_stacking")
+                        quality_penalty += 30.0
+                    if ENABLE_TUCK_CHECK and tuck_ok is False:
+                        rep_issue_codes.append("elbow_tuck_off")
+                        quality_penalty += 15.0
+
+                    rep_quality = max(0.0, 100.0 - quality_penalty)
+
                     repFeedback.append(
                         {
                             "repIndex": repCount,
                             "side": side,
+                            "startFrameIndex": rep_start_frame_index,
+                            "endFrameIndex": getattr(pf, "frameIndex", None),
+                            "quality": round(rep_quality, 1),
+                            "issues": rep_issue_codes,
 
                             "romOk": rom_ok,
                             "romDeg": round(rom, 1),
@@ -277,6 +303,7 @@ class SideBenchPressAnalyzer(BaseAnalyzer):
                     rep_elbow_max = None
                     rep_tuck_min = None
                     rep_tuck_max = None
+                    rep_start_frame_index = None
 
         # ---------------------------
         # Summaries -> issues

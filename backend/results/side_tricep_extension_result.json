@@ -1,0 +1,61 @@
+{
+  "exercise": "tricep_extension_side",
+  "status": "success",
+  "message": "Side tricep extension analysis completed.",
+  "repCount": 2,
+  "summaryScore": 1.0,
+  "issues": [],
+  "repFeedback": [
+    {
+      "repIndex": 1,
+      "side": "left",
+      "startFrameIndex": 0,
+      "endFrameIndex": 19,
+      "quality": 100.0,
+      "issues": [],
+      "romOk": true,
+      "romDeg": 83.7,
+      "minElbowDeg": 72.4,
+      "maxElbowDeg": 156.1,
+      "hitBottom": true,
+      "hitTop": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.009,
+      "upperArmStable": true,
+      "upperArmAngleDriftDeg": 3.2
+    },
+    {
+      "repIndex": 2,
+      "side": "left",
+      "startFrameIndex": 114,
+      "endFrameIndex": 139,
+      "quality": 100.0,
+      "issues": [],
+      "romOk": true,
+      "romDeg": 77.9,
+      "minElbowDeg": 79.2,
+      "maxElbowDeg": 157.1,
+      "hitBottom": true,
+      "hitTop": true,
+      "elbowStable": true,
+      "elbowRelXDrift": 0.038,
+      "upperArmStable": true,
+      "upperArmAngleDriftDeg": 12.8
+    }
+  ],
+  "metrics": {
+    "side": "left",
+    "topAngleDeg": 160.0,
+    "bottomAngleDeg": 85.0,
+    "hysteresisDeg": 5.0,
+    "smoothWindow": 5,
+    "minRomDeg": 65.0,
+    "bottomMarginDeg": 5.0,
+    "topMarginDeg": 5.0,
+    "elbowRelXDriftWarn": 0.05,
+    "upperArmAngleDriftWarn": 20.0,
+    "elbowRelXDriftAvg": 0.0237,
+    "upperArmAngleDriftAvg": 7.98
+  },
+  "warnings": []
+}

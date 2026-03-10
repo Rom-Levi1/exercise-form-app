@@ -1,0 +1,67 @@
+{
+  "exercise": "squat",
+  "status": "success",
+  "message": "Front-view squat analysis completed (stance width + symmetry checks only).",
+  "repCount": 0,
+  "summaryScore": 92.0,
+  "issues": [
+    {
+      "code": "asymmetry_issue",
+      "message": "Mild left/right imbalance appeared during parts of the clip.",
+      "severity": "low"
+    }
+  ],
+  "repFeedback": [
+    {
+      "rep": null,
+      "quality": 92.0,
+      "issues": [
+        "asymmetry_issue"
+      ],
+      "checks": {
+        "stanceWidth": {
+          "classification": "acceptable",
+          "avgStanceToShoulderRatio": 1.36,
+          "minStanceToShoulderRatio": 1.299,
+          "maxStanceToShoulderRatio": 1.416
+        },
+        "symmetry": {
+          "classification": "mild_imbalance",
+          "avgNormalizedImbalance": 0.0315,
+          "maxNormalizedImbalance": 0.0831,
+          "minNormalizedImbalance": 0.0094
+        }
+      }
+    }
+  ],
+  "metrics": {
+    "view": "front",
+    "analysisMode": "clip_level_only",
+    "signalQuality": {
+      "totalFrames": 310,
+      "validStanceFrames": 310,
+      "validStanceRatio": 1.0,
+      "validSymmetryFrames": 310,
+      "validSymmetryRatio": 1.0
+    },
+    "globalSignals": {
+      "stanceToShoulderRatio": {
+        "min": 1.299,
+        "max": 1.416,
+        "avg": 1.36
+      },
+      "normalizedSymmetryImbalance": {
+        "min": 0.0094,
+        "max": 0.0831,
+        "avg": 0.0315
+      }
+    },
+    "clipCheckSummary": {
+      "stanceClassification": "acceptable",
+      "symmetryClassification": "mild_imbalance"
+    }
+  },
+  "warnings": [
+    "Front view is used for supplemental squat checks only and does not estimate reps."
+  ]
+}

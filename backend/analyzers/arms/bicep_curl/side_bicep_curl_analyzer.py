@@ -76,6 +76,7 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
         rep_elbow_rel_x_min: Optional[float] = None
         rep_elbow_rel_x_max: Optional[float] = None
         rep_started_from_bottom = False
+        rep_start_frame_index: Optional[int] = None
 
         for pf in poseFrames:
             if not getattr(pf, "hasPose", False):
@@ -108,6 +109,7 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
                     rep_elbow_rel_x_min = elbowRelX
                     rep_elbow_rel_x_max = elbowRelX
                     rep_started_from_bottom = True
+                    rep_start_frame_index = getattr(pf, "frameIndex", None)
                 continue
 
             if state == "TOP_LOCKED":
@@ -149,10 +151,25 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
                 elbowStable = elbowRelXDrift < ELBOW_REL_X_DRIFT_WARN
                 rep_elbow_rel_x_drifts.append(elbowRelXDrift)
 
+                repIssuesCodes: List[str] = []
+                repQualityPenalty = 0.0
+                if not romOk:
+                    repIssuesCodes.append("rom_incomplete")
+                    repQualityPenalty += 50.0
+                if not elbowStable:
+                    repIssuesCodes.append("elbow_drift")
+                    repQualityPenalty += 50.0
+
+                repQuality = max(0.0, 100.0 - repQualityPenalty)
+
                 repFeedback.append(
                     {
                         "repIndex": repCount,
                         "side": side,
+                        "startFrameIndex": rep_start_frame_index,
+                        "endFrameIndex": getattr(pf, "frameIndex", None),
+                        "quality": round(repQuality, 1),
+                        "issues": repIssuesCodes,
                         "romOk": romOk,
                         "romDeg": round(rom, 1),
                         "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
@@ -170,6 +187,7 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
                 rep_elbow_rel_x_min = None
                 rep_elbow_rel_x_max = None
                 rep_started_from_bottom = False
+                rep_start_frame_index = None
 
         elbowRelXDriftAvg = safe_avg(rep_elbow_rel_x_drifts)
 
