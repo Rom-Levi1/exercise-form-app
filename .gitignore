@@ -8,3 +8,11 @@ node_modules/
 *.avi
 *.mov
 *.mkv
+
+
+
+backend/results/*.json
+backend/results/*.mp4
+backend/results/*.webm
+backend/results/_codec_test*
+backend/uploads/*
