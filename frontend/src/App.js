@@ -5,6 +5,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 import HomePage from "./Homepage/Homepage.jsx";
 import AuthPage from "./AuthPage/AuthPage.jsx";
 import UploadPage from "./UploadPage/UploadPage.jsx";
+import ResultPage from "./ResultPage/ResultPage.jsx";
 
 function App() {
   const navigate = useNavigate();
@@ -33,6 +34,16 @@ function App() {
       <Route
         path="/upload"
         element={<UploadPage onLogoClick={() => navigate("/")} />}
+      />
+
+      <Route
+        path="/result"
+        element={
+          <ResultPage
+            onLogoClick={() => navigate("/")}
+            onBackToUpload={() => navigate("/upload")}
+          />
+        }
       />
     </Routes>
   );

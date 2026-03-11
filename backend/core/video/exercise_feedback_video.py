@@ -326,6 +326,31 @@ def _draw_skeleton(frameBgr, landmarks: Dict[str, Any], minVisibility: float = 0
         cv2.circle(frameBgr, center, 4, (80, 255, 80), -1, cv2.LINE_AA)
 
 
+def _create_video_writer(outputPath: Path, fps: float, width: int, height: int):
+    """
+    Prefer browser-friendly H.264 on Windows (MSMF), fallback to mp4v.
+    """
+    # Windows Media Foundation path: tends to produce browser-playable MP4 (H.264).
+    writer = cv2.VideoWriter(
+        str(outputPath),
+        cv2.CAP_MSMF,
+        cv2.VideoWriter_fourcc(*"H264"),
+        fps,
+        (width, height),
+    )
+    if writer.isOpened():
+        return writer
+
+    # Fallback path used before (may not be browser-decodable in all browsers).
+    writer = cv2.VideoWriter(
+        str(outputPath),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (width, height),
+    )
+    return writer
+
+
 def create_exercise_feedback_video(
     videoPath: str,
     poseFrames: List[Any],
@@ -372,11 +397,11 @@ def create_exercise_feedback_video(
     outputP = Path(outputPath)
     outputP.parent.mkdir(parents=True, exist_ok=True)
 
-    writer = cv2.VideoWriter(
-        str(outputP),
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        fps,
-        (outputWidth, height),
+    writer = _create_video_writer(
+        outputPath=outputP,
+        fps=fps,
+        width=outputWidth,
+        height=height,
     )
 
     if not writer.isOpened():

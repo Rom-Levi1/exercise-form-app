@@ -1,13 +1,184 @@
-/* src/UploadPage/UploadPage.css */
-
 .upload-page {
-  background-color: #080a1f; /* navy blue, same vibe as homepage */
+  background-color: #080a1f;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* empty center area for future content */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: #080a1f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.03em;
+}
+
 .upload-main {
   flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+}
+
+.upload-card {
+  width: min(980px, 100%);
+  background: #10122a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.upload-title {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+}
+
+.exercise-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.exercise-toggle-btn {
+  border: 1px solid rgba(200, 201, 255, 0.35);
+  background: transparent;
+  color: #d8d9ff;
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.exercise-toggle-btn:hover {
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #ffffff;
+}
+
+.exercise-toggle-btn.active {
+  background: linear-gradient(135deg, #4f46e5, #10b981);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.drop-zone {
+  border: 2px dashed rgba(200, 201, 255, 0.35);
+  border-radius: 14px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  padding: 18px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.drop-zone:hover {
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+.drop-zone.drag-active {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.drop-zone-main {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.drop-zone-sub {
+  color: #b9bcff;
+  font-size: 0.95rem;
+}
+
+.drop-zone-file {
+  margin-top: 16px;
+  color: #ffffff;
+  font-size: 0.92rem;
+  background: rgba(79, 70, 229, 0.2);
+  border: 1px solid rgba(79, 70, 229, 0.5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.upload-submit-btn {
+  margin-top: 18px;
+  width: 100%;
+  max-width: 240px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  background: #4f46e5;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.upload-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-status {
+  margin-top: 14px;
+  color: #d0d1ff;
+}
+
+.upload-result {
+  margin-top: 16px;
+  background: #0d0f24;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.upload-result p {
+  margin-bottom: 8px;
+}
+
+.upload-result a {
+  color: #8cb7ff;
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    padding: 12px 16px;
+  }
+
+  .upload-main {
+    padding: 18px 12px;
+  }
+
+  .upload-card {
+    padding: 16px;
+  }
+
+  .drop-zone {
+    min-height: 180px;
+  }
 }
