@@ -3,13 +3,65 @@ import { useNavigate } from "react-router-dom";
 import "../App.css";
 import "./UploadPage.css";
 
+const EXERCISE_METADATA = {
+  bench_front: {
+    muscleGroup: "Chest",
+    exerciseName: "Bench Press",
+    view: "Front",
+  },
+  bench_side: {
+    muscleGroup: "Chest",
+    exerciseName: "Bench Press",
+    view: "Side",
+  },
+  squat_front: {
+    muscleGroup: "Legs",
+    exerciseName: "Squat",
+    view: "Front",
+  },
+  squat_side: {
+    muscleGroup: "Legs",
+    exerciseName: "Squat",
+    view: "Side",
+  },
+  pullup_back: {
+    muscleGroup: "Back",
+    exerciseName: "Pull-Up",
+    view: "Back",
+  },
+  bicep_curl_side: {
+    muscleGroup: "Arms",
+    exerciseName: "Bicep Curl",
+    view: "Side",
+  },
+  tricep_extension_side: {
+    muscleGroup: "Arms",
+    exerciseName: "Tricep Extension",
+    view: "Side",
+  },
+  shoulder_press_front: {
+    muscleGroup: "Shoulders",
+    exerciseName: "Shoulder Press",
+    view: "Front",
+  },
+};
+
+function titleCaseExerciseKey(exerciseKey) {
+  return exerciseKey
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function UploadPage({ onLogoClick }) {
   const navigate = useNavigate();
   const apiBase = process.env.REACT_APP_API_BASE || "http://127.0.0.1:8000";
   const fileInputRef = useRef(null);
 
   const [exercises, setExercises] = useState([]);
-  const [selectedExercise, setSelectedExercise] = useState("");
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState("");
+  const [selectedExerciseName, setSelectedExerciseName] = useState("");
+  const [selectedView, setSelectedView] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -32,7 +84,6 @@ function UploadPage({ onLogoClick }) {
         const data = await response.json();
         const fetchedExercises = Array.isArray(data.exercises) ? data.exercises : [];
         setExercises(fetchedExercises);
-        setSelectedExercise((current) => current || fetchedExercises[0] || "");
         setStatusText("");
       } catch (error) {
         if (error.name !== "AbortError") {
@@ -45,23 +96,86 @@ function UploadPage({ onLogoClick }) {
     return () => controller.abort();
   }, [apiBase]);
 
-  const exerciseLabelMap = useMemo(
-    () => ({
-      bench_front: "Bench Front",
-      bench_side: "Bench Side",
-      squat_front: "Squat Front",
-      squat_side: "Squat Side",
-      pullup_back: "Pull-Up Back",
-      bicep_curl_side: "Bicep Curl Side",
-      tricep_extension_side: "Tricep Extension Side",
-      shoulder_press_front: "Shoulder Press Front",
-    }),
-    []
+  const exerciseCatalog = useMemo(
+    () =>
+      exercises.map((exerciseKey) => ({
+        key: exerciseKey,
+        ...(EXERCISE_METADATA[exerciseKey] || {
+          muscleGroup: "Other",
+          exerciseName: titleCaseExerciseKey(exerciseKey),
+          view: "Default",
+        }),
+      })),
+    [exercises]
   );
 
-  function getExerciseLabel(exerciseKey) {
-    return exerciseLabelMap[exerciseKey] || exerciseKey.replaceAll("_", " ");
-  }
+  const muscleGroups = useMemo(
+    () => [...new Set(exerciseCatalog.map((entry) => entry.muscleGroup))],
+    [exerciseCatalog]
+  );
+
+  const exerciseNames = useMemo(() => {
+    return [
+      ...new Set(
+        exerciseCatalog
+          .filter((entry) => entry.muscleGroup === selectedMuscleGroup)
+          .map((entry) => entry.exerciseName)
+      ),
+    ];
+  }, [exerciseCatalog, selectedMuscleGroup]);
+
+  const viewOptions = useMemo(() => {
+    return exerciseCatalog
+      .filter(
+        (entry) =>
+          entry.muscleGroup === selectedMuscleGroup &&
+          entry.exerciseName === selectedExerciseName
+      )
+      .map((entry) => ({
+        key: entry.key,
+        label: entry.view,
+      }));
+  }, [exerciseCatalog, selectedExerciseName, selectedMuscleGroup]);
+
+  const selectedExercise = useMemo(() => {
+    return (
+      viewOptions.find((option) => option.label === selectedView)?.key || ""
+    );
+  }, [selectedView, viewOptions]);
+
+  useEffect(() => {
+    if (!muscleGroups.length) {
+      setSelectedMuscleGroup("");
+      return;
+    }
+
+    setSelectedMuscleGroup((current) =>
+      muscleGroups.includes(current) ? current : muscleGroups[0]
+    );
+  }, [muscleGroups]);
+
+  useEffect(() => {
+    if (!exerciseNames.length) {
+      setSelectedExerciseName("");
+      return;
+    }
+
+    setSelectedExerciseName((current) =>
+      exerciseNames.includes(current) ? current : exerciseNames[0]
+    );
+  }, [exerciseNames]);
+
+  useEffect(() => {
+    if (!viewOptions.length) {
+      setSelectedView("");
+      return;
+    }
+
+    const validViews = viewOptions.map((option) => option.label);
+    setSelectedView((current) =>
+      validViews.includes(current) ? current : viewOptions[0].label
+    );
+  }, [viewOptions]);
 
   function handleFilePick(file) {
     if (!file) {
@@ -148,19 +262,60 @@ function UploadPage({ onLogoClick }) {
         <section className="upload-card">
           <h1 className="upload-title">Upload Workout Video</h1>
 
-          <div className="exercise-toggle-row">
-            {exercises.map((exercise) => (
-              <button
-                key={exercise}
-                type="button"
-                className={`exercise-toggle-btn ${
-                  selectedExercise === exercise ? "active" : ""
-                }`}
-                onClick={() => setSelectedExercise(exercise)}
-              >
-                {getExerciseLabel(exercise)}
-              </button>
-            ))}
+          <div className="selection-stack">
+            <div className="selection-group">
+              <p className="selection-label">1. Muscle group</p>
+              <div className="exercise-toggle-row">
+                {muscleGroups.map((group) => (
+                  <button
+                    key={group}
+                    type="button"
+                    className={`exercise-toggle-btn ${
+                      selectedMuscleGroup === group ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedMuscleGroup(group)}
+                  >
+                    {group}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="selection-group">
+              <p className="selection-label">2. Exercise</p>
+              <div className="exercise-toggle-row">
+                {exerciseNames.map((exerciseName) => (
+                  <button
+                    key={exerciseName}
+                    type="button"
+                    className={`exercise-toggle-btn ${
+                      selectedExerciseName === exerciseName ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedExerciseName(exerciseName)}
+                  >
+                    {exerciseName}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="selection-group">
+              <p className="selection-label">3. Camera view</p>
+              <div className="exercise-toggle-row">
+                {viewOptions.map((viewOption) => (
+                  <button
+                    key={viewOption.key}
+                    type="button"
+                    className={`exercise-toggle-btn ${
+                      selectedView === viewOption.label ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedView(viewOption.label)}
+                  >
+                    {viewOption.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div
