@@ -15,6 +15,7 @@ from backend.core.video.bench_feedback_video import create_bench_feedback_video
 from backend.core.video.front_squat_feedback_video import create_front_squat_feedback_video
 from backend.core.video.squat_feedback_video import create_squat_feedback_video
 from backend.core.video.standard_feedback_video import create_standard_feedback_video
+from backend.feedback.build_text_feedback import build_text_feedback
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -360,11 +361,13 @@ async def analyze_video(
             analysisResult=result,
             outputPath=str(feedbackVideoPath),
         )
+        textFeedback = build_text_feedback(exercise, result)
 
         response = {
             "runId": runId,
             "exercise": exercise,
             "analysis": result,
+            "textFeedback": textFeedback,
             "uploadedVideoUrl": f"/media/uploads/{uploadedPath.name}",
             "resultJsonUrl": f"/media/results/{resultJsonPath.name}",
             "feedbackVideoUrl": (

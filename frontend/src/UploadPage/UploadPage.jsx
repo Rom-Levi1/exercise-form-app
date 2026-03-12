@@ -238,6 +238,7 @@ function UploadPage({ onLogoClick }) {
         state: {
           exercise: data.exercise,
           analysis: data.analysis,
+          textFeedback: data.textFeedback,
           feedbackVideoUrl: data.feedbackVideoUrl
             ? `${apiBase}${data.feedbackVideoUrl}`
             : "",

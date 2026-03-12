@@ -42,8 +42,133 @@
   max-width: 260px;
 }
 
+.result-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.feedback-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.feedback-section {
+  background: #0d0f24;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.feedback-eyebrow {
+  margin: 0 0 8px;
+  color: #b9bcff;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.8rem;
+}
+
+.feedback-title {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+.feedback-summary {
+  margin: 0;
+  color: #d0d1ff;
+  line-height: 1.5;
+}
+
+.feedback-highlight-list,
+.rep-breakdown-list,
+.feedback-warning-list {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-highlight-card,
+.rep-breakdown-item,
+.feedback-warning-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.feedback-highlight-card p,
+.rep-breakdown-item p {
+  margin: 8px 0 0;
+  color: #d0d1ff;
+}
+
+.feedback-highlight-top,
+.rep-breakdown-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.feedback-highlight-top h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.feedback-severity {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.severity-low,
+.severity-good,
+.severity-strong {
+  background: rgba(16, 185, 129, 0.14);
+  color: #75efb4;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.severity-medium,
+.severity-needs_work {
+  background: rgba(245, 158, 11, 0.14);
+  color: #ffd27d;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.severity-high,
+.severity-poor {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ff9c9c;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.severity-unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: #d8d9ff;
+  border-color: rgba(148, 163, 184, 0.32);
+}
+
+.feedback-cue,
+.feedback-reps,
+.rep-breakdown-detail {
+  font-size: 0.94rem;
+}
+
+.feedback-warning-item {
+  margin: 0;
+  color: #ffe0a3;
+}
+
 @media (max-width: 800px) {
   .result-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .result-content-grid {
     grid-template-columns: 1fr;
   }
 }

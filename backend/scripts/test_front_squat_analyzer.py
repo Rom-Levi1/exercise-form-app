@@ -71,7 +71,7 @@ def main():
     print("\n=== Front Squat Analyzer Summary ===")
     print(f"Saved JSON result to: {outputPath}")
     print(f"Status: {result.get('status')}")
-    print(f"Rep count: {result.get('repCount')} (expected: 0 for front-view clip-level mode)")
+    print(f"Rep count: {result.get('repCount')}")
     print(f"Summary score: {result.get('summaryScore')}")
     print(f"Top-level issues: {[issue.get('code') for issue in result.get('issues', [])]}")
     print(f"Warnings: {result.get('warnings', [])}")
@@ -80,40 +80,35 @@ def main():
     metrics = result.get("metrics", {})
     repFeedback = result.get("repFeedback", [])
 
-    print("\n=== Front Squat Clip-Level Checks ===")
+    print("\n=== Front Squat Rep-Level Checks ===")
     print(f"Analysis mode: {metrics.get('analysisMode')}")
     print(f"View: {metrics.get('view')}")
 
-    if repFeedback:
-        clipSummary = repFeedback[0]
-        checks = clipSummary.get("checks", {})
-
-        stanceWidth = checks.get("stanceWidth", {})
-        symmetry = checks.get("symmetry", {})
-
-        print(f"Clip quality: {clipSummary.get('quality')}")
-        print(f"Clip issues: {clipSummary.get('issues', [])}")
-
-        print("\nStance Width:")
-        print(f"  Classification: {stanceWidth.get('classification')}")
-        print(f"  Avg stance/shoulder ratio: {stanceWidth.get('avgStanceToShoulderRatio')}")
-        print(f"  Min stance/shoulder ratio: {stanceWidth.get('minStanceToShoulderRatio')}")
-        print(f"  Max stance/shoulder ratio: {stanceWidth.get('maxStanceToShoulderRatio')}")
-
-        print("\nSymmetry:")
-        print(f"  Classification: {symmetry.get('classification')}")
-        print(f"  Avg normalized imbalance: {symmetry.get('avgNormalizedImbalance')}")
-        print(f"  Min normalized imbalance: {symmetry.get('minNormalizedImbalance')}")
-        print(f"  Max normalized imbalance: {symmetry.get('maxNormalizedImbalance')}")
+    if not repFeedback:
+        print("No rep-level feedback returned.")
     else:
-        print("No clip-level feedback returned.")
+        for repSummary in repFeedback:
+            checks = repSummary.get("checks", {})
+            stanceWidth = checks.get("stanceWidth", {})
+            symmetry = checks.get("symmetry", {})
+
+            print(f"\nRep {repSummary.get('rep')}:")
+            print(f"  Quality: {repSummary.get('quality')}")
+            print(f"  Issues: {repSummary.get('issues', [])}")
+            print(f"  Start frame: {repSummary.get('startFrameIndex')}")
+            print(f"  Bottom frame: {repSummary.get('bottomFrameIndex')}")
+            print(f"  End frame: {repSummary.get('endFrameIndex')}")
+            print(f"  Stance classification: {stanceWidth.get('classification')}")
+            print(f"  Avg stance/shoulder ratio: {stanceWidth.get('avgStanceToShoulderRatio')}")
+            print(f"  Symmetry classification: {symmetry.get('classification')}")
+            print(f"  Max normalized imbalance: {symmetry.get('maxNormalizedImbalance')}")
 
     print("\n=== Front Squat Validation Checklist ===")
     print(f"status == 'success': {result.get('status') == 'success'}")
-    print(f"repCount == 0: {result.get('repCount') == 0}")
+    print(f"repCount > 0: {result.get('repCount', 0) > 0}")
     print(f"summaryScore is not None: {result.get('summaryScore') is not None}")
-    print(f"analysisMode == 'clip_level_only': {metrics.get('analysisMode') == 'clip_level_only'}")
-    print(f"repFeedback has one entry: {len(repFeedback) == 1}")
+    print(f"analysisMode == 'rep_level': {metrics.get('analysisMode') == 'rep_level'}")
+    print(f"repFeedback count matches repCount: {len(repFeedback) == result.get('repCount')}")
 
 
 if __name__ == "__main__":
