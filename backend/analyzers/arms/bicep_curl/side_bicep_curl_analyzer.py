@@ -11,6 +11,8 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
       - Rep counting via elbow angle with hysteresis + smoothing
       - ROM validation per rep (min/max elbow angle + minimum ROM)
       - Elbow stability proxy (elbow position drift on x-axis relative to shoulder)
+
+    Supports automatic side selection so left-arm side videos work without an explicit side choice.
     """
 
     def __init__(self):
@@ -25,131 +27,231 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
     ) -> Dict[str, Any]:
         options = options or {}
 
-        side = str(options.get("side", "left")).lower()
-        if side not in ("left", "right"):
-            side = "left"
+        bottomAngleDeg = float(options.get("bottomAngleDeg", 158))
+        topAngleDeg = float(options.get("topAngleDeg", 68))
+        hysteresisDeg = float(options.get("hysteresisDeg", 6))
+        smoothWindow = int(options.get("smoothWindow", 5))
+        minRomDeg = float(options.get("minRomDeg", 70))
+        bottomMarginDeg = float(options.get("bottomMarginDeg", 12))
+        topMarginDeg = float(options.get("topMarginDeg", 8))
+        elbowRelXDriftWarn = float(options.get("elbowRelXDriftWarn", 0.27))
 
-        SHOULDER = f"{side}_shoulder"
-        ELBOW = f"{side}_elbow"
-        WRIST = f"{side}_wrist"
+        requestedSide = str(options.get("side", "auto")).lower()
+        if requestedSide not in ("left", "right", "auto"):
+            requestedSide = "auto"
 
-        # Rep thresholds for curls (bottom=extended, top=flexed).
-        BOTTOM_ANGLE = float(options.get("bottomAngleDeg", 158))
-        TOP_ANGLE = float(options.get("topAngleDeg", 68))
-        HYST_DEG = float(options.get("hysteresisDeg", 6))
-        SMOOTH_WINDOW = int(options.get("smoothWindow", 5))
+        candidateSides = ("left", "right") if requestedSide == "auto" else (requestedSide,)
+        candidateResults = [
+            self._analyze_side(
+                poseFrames=poseFrames,
+                side=side,
+                bottomAngleDeg=bottomAngleDeg,
+                topAngleDeg=topAngleDeg,
+                hysteresisDeg=hysteresisDeg,
+                smoothWindow=smoothWindow,
+                minRomDeg=minRomDeg,
+                bottomMarginDeg=bottomMarginDeg,
+                topMarginDeg=topMarginDeg,
+                elbowRelXDriftWarn=elbowRelXDriftWarn,
+            )
+            for side in candidateSides
+        ]
 
-        # ROM thresholds
-        MIN_ROM_DEG = float(options.get("minRomDeg", 70))
-        BOTTOM_MARGIN = float(options.get("bottomMarginDeg", 12))
-        TOP_MARGIN = float(options.get("topMarginDeg", 8))
+        bestResult = max(
+            candidateResults,
+            key=lambda result: (
+                result["repCount"],
+                result["goodReps"],
+                result["trackedFrameCount"],
+                result["avgRomDeg"],
+            ),
+        )
 
-        # Elbow steadiness threshold on x-axis (normalized image coordinates).
-        ELBOW_REL_X_DRIFT_WARN = float(options.get("elbowRelXDriftWarn", 0.27))
+        repCount = bestResult["repCount"]
+        repFeedback = bestResult["repFeedback"]
+        elbowRelXDriftAvg = bestResult["elbowRelXDriftAvg"]
+        chosenSide = bestResult["side"]
+
+        issues: List[Dict[str, Any]] = []
+        warnings: List[str] = []
+
+        if repCount == 0:
+            issues.append(
+                self.buildIssue(
+                    code="no_reps_detected",
+                    message=(
+                        "No side bicep curl reps detected. Ensure the working shoulder, elbow, and wrist "
+                        "are clearly visible through the full curl."
+                    ),
+                    severity="medium",
+                )
+            )
+
+        if elbowRelXDriftAvg is not None and elbowRelXDriftAvg > elbowRelXDriftWarn:
+            issues.append(
+                self.buildIssue(
+                    code="elbow_drift",
+                    message=(
+                        f"Elbow drift on x-axis looked high (avg drift={elbowRelXDriftAvg:.3f}). "
+                        "Keep elbow fixed near torso."
+                    ),
+                    severity="low",
+                )
+            )
+
+        if requestedSide == "auto":
+            if repCount > 0:
+                warnings.append(
+                    f"Automatically analyzed the {chosenSide} arm based on clearer curl tracking."
+                )
+            else:
+                warnings.append(
+                    "Tried analyzing both arms automatically, but no clear reps were found."
+                )
+
+        goodReps = bestResult["goodReps"]
+        summaryScore = (goodReps / repCount) if repCount > 0 else None
+
+        metrics = {
+            "side": chosenSide,
+            "sideSelectionMode": requestedSide,
+            "bottomAngleDeg": bottomAngleDeg,
+            "topAngleDeg": topAngleDeg,
+            "hysteresisDeg": hysteresisDeg,
+            "smoothWindow": smoothWindow,
+            "minRomDeg": minRomDeg,
+            "bottomMarginDeg": bottomMarginDeg,
+            "topMarginDeg": topMarginDeg,
+            "elbowRelXDriftWarn": elbowRelXDriftWarn,
+            "elbowRelXDriftAvg": (
+                None if elbowRelXDriftAvg is None else round(elbowRelXDriftAvg, 4)
+            ),
+            "trackedFrameCount": bestResult["trackedFrameCount"],
+        }
+
+        return self.buildSuccessResult(
+            repCount=repCount,
+            summaryScore=summaryScore,
+            issues=issues,
+            repFeedback=repFeedback,
+            metrics=metrics,
+            warnings=warnings,
+            message="Side bicep curl analysis completed.",
+        )
+
+    def _analyze_side(
+        self,
+        poseFrames: List[Any],
+        side: str,
+        bottomAngleDeg: float,
+        topAngleDeg: float,
+        hysteresisDeg: float,
+        smoothWindow: int,
+        minRomDeg: float,
+        bottomMarginDeg: float,
+        topMarginDeg: float,
+        elbowRelXDriftWarn: float,
+    ) -> Dict[str, Any]:
+        shoulderName = f"{side}_shoulder"
+        elbowName = f"{side}_elbow"
+        wristName = f"{side}_wrist"
 
         def get_xy(lm: Dict[str, Any], name: str) -> Optional[Tuple[float, float]]:
-            p = lm.get(name)
-            if p is None:
+            point = lm.get(name)
+            if point is None:
                 return None
-            return (float(p.x), float(p.y))
+            return (float(point.x), float(point.y))
 
         def safe_avg(values: List[float]) -> Optional[float]:
             return (sum(values) / len(values)) if values else None
 
         def in_bottom_zone(angle: float) -> bool:
-            return angle >= (BOTTOM_ANGLE - HYST_DEG)
+            return angle >= (bottomAngleDeg - hysteresisDeg)
 
         def in_top_zone(angle: float) -> bool:
-            return angle <= (TOP_ANGLE + HYST_DEG)
+            return angle <= (topAngleDeg + hysteresisDeg)
 
         repCount = 0
-        issues: List[Dict[str, Any]] = []
         repFeedback: List[Dict[str, Any]] = []
 
-        angleBuf: Deque[float] = deque(maxlen=max(1, SMOOTH_WINDOW))
-        state = "UNKNOWN"  # "BOTTOM_READY" | "UP_IN_REP" | "TOP_LOCKED"
+        angleBuf: Deque[float] = deque(maxlen=max(1, smoothWindow))
+        state = "UNKNOWN"
 
-        rep_elbow_rel_x_drifts: List[float] = []
+        repElbowRelXDrifts: List[float] = []
+        trackedFrameCount = 0
+        repRomValues: List[float] = []
 
-        rep_elbow_min: Optional[float] = None
-        rep_elbow_max: Optional[float] = None
-        rep_elbow_rel_x_min: Optional[float] = None
-        rep_elbow_rel_x_max: Optional[float] = None
-        rep_started_from_bottom = False
-        rep_start_frame_index: Optional[int] = None
+        repElbowMin: Optional[float] = None
+        repElbowMax: Optional[float] = None
+        repElbowRelXMin: Optional[float] = None
+        repElbowRelXMax: Optional[float] = None
+        repStartedFromBottom = False
+        repStartFrameIndex: Optional[int] = None
 
-        for pf in poseFrames:
-            if not getattr(pf, "hasPose", False):
+        for poseFrame in poseFrames:
+            if not getattr(poseFrame, "hasPose", False):
                 continue
 
-            lm = pf.landmarks
-            sh = get_xy(lm, SHOULDER)
-            el = get_xy(lm, ELBOW)
-            wr = get_xy(lm, WRIST)
-            if not (sh and el and wr):
+            landmarks = poseFrame.landmarks
+            shoulder = get_xy(landmarks, shoulderName)
+            elbow = get_xy(landmarks, elbowName)
+            wrist = get_xy(landmarks, wristName)
+            if not (shoulder and elbow and wrist):
                 continue
 
-            rawElbowAngle = getLandmarkAngle(lm, SHOULDER, ELBOW, WRIST)
+            rawElbowAngle = getLandmarkAngle(landmarks, shoulderName, elbowName, wristName)
             if rawElbowAngle is None:
                 continue
 
+            trackedFrameCount += 1
             angleBuf.append(float(rawElbowAngle))
             elbowAngle = sum(angleBuf) / len(angleBuf)
-            elbowRelX = el[0] - sh[0]
+            elbowRelX = elbow[0] - shoulder[0]
 
             if state == "UNKNOWN":
                 state = "BOTTOM_READY" if in_bottom_zone(elbowAngle) else "TOP_LOCKED"
 
             if state == "BOTTOM_READY":
-                # Start a rep once the arm begins flexing away from the open/bottom zone.
                 if not in_bottom_zone(elbowAngle):
                     state = "UP_IN_REP"
-                    rep_elbow_min = elbowAngle
-                    rep_elbow_max = elbowAngle
-                    rep_elbow_rel_x_min = elbowRelX
-                    rep_elbow_rel_x_max = elbowRelX
-                    rep_started_from_bottom = True
-                    rep_start_frame_index = getattr(pf, "frameIndex", None)
+                    repElbowMin = elbowAngle
+                    repElbowMax = elbowAngle
+                    repElbowRelXMin = elbowRelX
+                    repElbowRelXMax = elbowRelX
+                    repStartedFromBottom = True
+                    repStartFrameIndex = getattr(poseFrame, "frameIndex", None)
                 continue
 
             if state == "TOP_LOCKED":
-                # Require returning to bottom before allowing next rep.
                 if in_bottom_zone(elbowAngle):
                     state = "BOTTOM_READY"
                 continue
 
-            # state == UP_IN_REP
-            rep_elbow_min = elbowAngle if rep_elbow_min is None else min(rep_elbow_min, elbowAngle)
-            rep_elbow_max = elbowAngle if rep_elbow_max is None else max(rep_elbow_max, elbowAngle)
-            rep_elbow_rel_x_min = (
-                elbowRelX if rep_elbow_rel_x_min is None else min(rep_elbow_rel_x_min, elbowRelX)
-            )
-            rep_elbow_rel_x_max = (
-                elbowRelX if rep_elbow_rel_x_max is None else max(rep_elbow_rel_x_max, elbowRelX)
-            )
+            repElbowMin = elbowAngle if repElbowMin is None else min(repElbowMin, elbowAngle)
+            repElbowMax = elbowAngle if repElbowMax is None else max(repElbowMax, elbowAngle)
+            repElbowRelXMin = elbowRelX if repElbowRelXMin is None else min(repElbowRelXMin, elbowRelX)
+            repElbowRelXMax = elbowRelX if repElbowRelXMax is None else max(repElbowRelXMax, elbowRelX)
 
-            # Count rep when reaching the top/flexed zone after starting from bottom.
-            if in_top_zone(elbowAngle) and rep_started_from_bottom:
+            if in_top_zone(elbowAngle) and repStartedFromBottom:
                 repCount += 1
 
                 rom = (
-                    (rep_elbow_max - rep_elbow_min)
-                    if (rep_elbow_min is not None and rep_elbow_max is not None)
+                    (repElbowMax - repElbowMin)
+                    if (repElbowMin is not None and repElbowMax is not None)
                     else 0.0
                 )
-                hitTop = (rep_elbow_min is not None) and (rep_elbow_min <= (TOP_ANGLE + TOP_MARGIN))
-                hitBottom = (rep_elbow_max is not None) and (
-                    rep_elbow_max >= (BOTTOM_ANGLE - BOTTOM_MARGIN)
-                )
-                romOk = hitTop and hitBottom and (rom >= MIN_ROM_DEG)
+                repRomValues.append(rom)
+                hitTop = (repElbowMin is not None) and (repElbowMin <= (topAngleDeg + topMarginDeg))
+                hitBottom = (repElbowMax is not None) and (repElbowMax >= (bottomAngleDeg - bottomMarginDeg))
+                romOk = hitTop and hitBottom and (rom >= minRomDeg)
 
                 elbowRelXDrift = (
-                    (rep_elbow_rel_x_max - rep_elbow_rel_x_min)
-                    if (rep_elbow_rel_x_min is not None and rep_elbow_rel_x_max is not None)
+                    (repElbowRelXMax - repElbowRelXMin)
+                    if (repElbowRelXMin is not None and repElbowRelXMax is not None)
                     else 0.0
                 )
-                elbowStable = elbowRelXDrift < ELBOW_REL_X_DRIFT_WARN
-                rep_elbow_rel_x_drifts.append(elbowRelXDrift)
+                elbowStable = elbowRelXDrift < elbowRelXDriftWarn
+                repElbowRelXDrifts.append(elbowRelXDrift)
 
                 repIssuesCodes: List[str] = []
                 repQualityPenalty = 0.0
@@ -166,14 +268,14 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
                     {
                         "repIndex": repCount,
                         "side": side,
-                        "startFrameIndex": rep_start_frame_index,
-                        "endFrameIndex": getattr(pf, "frameIndex", None),
+                        "startFrameIndex": repStartFrameIndex,
+                        "endFrameIndex": getattr(poseFrame, "frameIndex", None),
                         "quality": round(repQuality, 1),
                         "issues": repIssuesCodes,
                         "romOk": romOk,
                         "romDeg": round(rom, 1),
-                        "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
-                        "maxElbowDeg": None if rep_elbow_max is None else round(rep_elbow_max, 1),
+                        "minElbowDeg": None if repElbowMin is None else round(repElbowMin, 1),
+                        "maxElbowDeg": None if repElbowMax is None else round(repElbowMax, 1),
                         "hitTop": hitTop,
                         "hitBottom": hitBottom,
                         "elbowStable": elbowStable,
@@ -182,66 +284,22 @@ class SideBicepCurlAnalyzer(BaseAnalyzer):
                 )
 
                 state = "TOP_LOCKED"
-                rep_elbow_min = None
-                rep_elbow_max = None
-                rep_elbow_rel_x_min = None
-                rep_elbow_rel_x_max = None
-                rep_started_from_bottom = False
-                rep_start_frame_index = None
+                repElbowMin = None
+                repElbowMax = None
+                repElbowRelXMin = None
+                repElbowRelXMax = None
+                repStartedFromBottom = False
+                repStartFrameIndex = None
 
-        elbowRelXDriftAvg = safe_avg(rep_elbow_rel_x_drifts)
+        goodReps = sum(1 for rep in repFeedback if rep.get("romOk") and rep.get("elbowStable"))
+        elbowRelXDriftAvg = safe_avg(repElbowRelXDrifts)
 
-        if repCount == 0:
-            issues.append(
-                self.buildIssue(
-                    code="no_reps_detected",
-                    message=(
-                        "No side bicep curl reps detected. Ensure shoulder/elbow/wrist are visible "
-                        "and tune thresholds if needed."
-                    ),
-                    severity="medium",
-                )
-            )
-
-        if elbowRelXDriftAvg is not None and elbowRelXDriftAvg > ELBOW_REL_X_DRIFT_WARN:
-            issues.append(
-                self.buildIssue(
-                    code="elbow_drift",
-                    message=(
-                        f"Elbow drift on x-axis looked high (avg drift={elbowRelXDriftAvg:.3f}). "
-                        "Keep elbow fixed near torso."
-                    ),
-                    severity="low",
-                )
-            )
-
-        def isGoodRep(rep: Dict[str, Any]) -> bool:
-            return bool(rep.get("romOk") and rep.get("elbowStable"))
-
-        goodReps = sum(1 for rep in repFeedback if isGoodRep(rep))
-        summaryScore = (goodReps / repCount) if repCount > 0 else None
-
-        metrics = {
+        return {
             "side": side,
-            "bottomAngleDeg": BOTTOM_ANGLE,
-            "topAngleDeg": TOP_ANGLE,
-            "hysteresisDeg": HYST_DEG,
-            "smoothWindow": SMOOTH_WINDOW,
-            "minRomDeg": MIN_ROM_DEG,
-            "bottomMarginDeg": BOTTOM_MARGIN,
-            "topMarginDeg": TOP_MARGIN,
-            "elbowRelXDriftWarn": ELBOW_REL_X_DRIFT_WARN,
-            "elbowRelXDriftAvg": (
-                None if elbowRelXDriftAvg is None else round(elbowRelXDriftAvg, 4)
-            ),
+            "repCount": repCount,
+            "goodReps": goodReps,
+            "repFeedback": repFeedback,
+            "elbowRelXDriftAvg": elbowRelXDriftAvg,
+            "trackedFrameCount": trackedFrameCount,
+            "avgRomDeg": safe_avg(repRomValues) or 0.0,
         }
-
-        return self.buildSuccessResult(
-            repCount=repCount,
-            summaryScore=summaryScore,
-            issues=issues,
-            repFeedback=repFeedback,
-            metrics=metrics,
-            warnings=[],
-            message="Side bicep curl analysis completed.",
-        )

@@ -142,7 +142,7 @@ def _exercise_default_options(exercise: str, side: Optional[str]) -> Dict[str, A
 
     if exercise == "bicep_curl_side":
         return {
-            "side": sideValue if sideValue in {"left", "right"} else "right",
+            "side": sideValue if sideValue in {"left", "right"} else "auto",
             "bottomAngleDeg": 158,
             "topAngleDeg": 68,
             "hysteresisDeg": 6,
