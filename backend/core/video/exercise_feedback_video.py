@@ -163,6 +163,78 @@ def build_rep_summaries_from_analysis_result(
     return summaries
 
 
+def build_rep_summaries_from_text_feedback(
+    analysisResult: Dict[str, Any],
+    textFeedback: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    repFeedback = analysisResult.get("repFeedback", [])
+    if not isinstance(repFeedback, list):
+        return []
+
+    repBreakdown = (textFeedback or {}).get("repBreakdown", [])
+    if not isinstance(repBreakdown, list):
+        return []
+
+    repFeedbackByNumber: Dict[int, Dict[str, Any]] = {}
+    for repData in repFeedback:
+        repNumber = repData.get("rep")
+        if not isinstance(repNumber, int):
+            repNumber = repData.get("repIndex")
+        if isinstance(repNumber, int):
+            repFeedbackByNumber[repNumber] = repData
+
+    summaries: List[Dict[str, Any]] = []
+    for breakdownItem in repBreakdown:
+        if not isinstance(breakdownItem, dict):
+            continue
+
+        repNumber = breakdownItem.get("rep")
+        if not isinstance(repNumber, int):
+            continue
+
+        repData = repFeedbackByNumber.get(repNumber)
+        if not isinstance(repData, dict):
+            continue
+
+        startFrame = repData.get("startFrameIndex")
+        endFrame = repData.get("endFrameIndex")
+        pauseFrame = repData.get("pauseFrameIndex")
+        if not isinstance(pauseFrame, int):
+            pauseFrame = repData.get("topFrameIndex")
+        if not isinstance(pauseFrame, int):
+            pauseFrame = endFrame
+
+        if not isinstance(startFrame, int) or not isinstance(endFrame, int):
+            continue
+
+        detailsText = breakdownItem.get("details")
+        detailLines: List[str] = []
+        if isinstance(detailsText, str) and detailsText.strip():
+            detailLines = [detailsText.strip()]
+
+        issues = repData.get("issues", [])
+        if not isinstance(issues, list):
+            issues = []
+
+        summaries.append(
+            {
+                "rep": repNumber,
+                "startFrameIndex": startFrame,
+                "endFrameIndex": endFrame,
+                "pauseFrameIndex": pauseFrame,
+                "quality": repData.get("quality"),
+                "issues": issues,
+                "headline": breakdownItem.get("label") or ("Strong rep" if not issues else "Needs adjustment"),
+                "detailLines": detailLines,
+                "rating": breakdownItem.get("rating"),
+                "isGoodRep": len(issues) == 0,
+            }
+        )
+
+    summaries.sort(key=lambda item: item["rep"])
+    return summaries
+
+
 def build_rep_summaries_from_boolean_checks(
     repFeedback: List[Dict[str, Any]],
     repWindows: List[Dict[str, int]],
@@ -277,18 +349,29 @@ def _draw_side_panel(
         return
 
     isGoodRep = bool(pauseSummary.get("isGoodRep"))
-    titleColor = (40, 140, 40) if isGoodRep else (30, 30, 180)
-    status = str(pauseSummary.get("status") or ("Good rep." if isGoodRep else "Needs work:"))
-    cv2.putText(frameBgr, status, (left, y), font, 0.72, titleColor, 2, cv2.LINE_AA)
-    y += 34
+    rating = str(pauseSummary.get("rating") or "")
+    titleColor = (30, 30, 180)
+    if isGoodRep or rating in {"strong", "good"}:
+        titleColor = (40, 140, 40)
+    elif rating == "needs_work":
+        titleColor = (20, 110, 190)
+
+    headline = str(
+        pauseSummary.get("headline")
+        or pauseSummary.get("status")
+        or ("Strong rep" if isGoodRep else "Needs adjustment")
+    )
+    for line in _wrap_text(headline, font, 0.72, 2, maxTextWidth):
+        cv2.putText(frameBgr, line, (left, y), font, 0.72, titleColor, 2, cv2.LINE_AA)
+        y += 30
+    y += 4
 
     detailLines = pauseSummary.get("detailLines", [])
     if not isinstance(detailLines, list):
         detailLines = []
 
     for message in detailLines[:3]:
-        prefix = "" if isGoodRep else "- "
-        for line in _wrap_text(f"{prefix}{message}", font, 0.57, 1, maxTextWidth):
+        for line in _wrap_text(str(message), font, 0.57, 1, maxTextWidth):
             cv2.putText(frameBgr, line, (left, y), font, 0.57, (45, 45, 45), 1, cv2.LINE_AA)
             y += 24
 

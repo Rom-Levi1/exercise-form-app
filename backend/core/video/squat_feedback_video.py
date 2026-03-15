@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.core.video.exercise_feedback_video import (
     build_rep_summaries_from_analysis_result,
+    build_rep_summaries_from_text_feedback,
     create_exercise_feedback_video,
 )
 
@@ -22,15 +23,18 @@ def create_squat_feedback_video(
     poseFrames: List[Any],
     analysisResult: Dict[str, Any],
     outputPath: str,
+    textFeedback: Optional[Dict[str, Any]] = None,
     pauseSeconds: float = 4.0,
     minVisibility: float = 0.4,
 ) -> Optional[str]:
-    repSummaries = build_rep_summaries_from_analysis_result(
-        analysisResult,
-        issueMessageResolver=_issue_code_to_message,
-        positiveStatus="Good rep.",
-        positiveDetailLines=["Depth, torso angle, and lockout looked good."],
-    )
+    repSummaries = build_rep_summaries_from_text_feedback(analysisResult, textFeedback)
+    if not repSummaries:
+        repSummaries = build_rep_summaries_from_analysis_result(
+            analysisResult,
+            issueMessageResolver=_issue_code_to_message,
+            positiveStatus="Good rep.",
+            positiveDetailLines=["Depth, torso angle, and lockout looked good."],
+        )
 
     return create_exercise_feedback_video(
         videoPath=videoPath,

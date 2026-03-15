@@ -196,6 +196,7 @@ def _create_feedback_video_for_exercise(
     videoPath: str,
     poseFrames: list,
     analysisResult: Dict[str, Any],
+    textFeedback: Dict[str, Any],
     outputPath: str,
 ) -> Optional[str]:
     if exercise == "squat_side":
@@ -203,6 +204,7 @@ def _create_feedback_video_for_exercise(
             videoPath=videoPath,
             poseFrames=poseFrames,
             analysisResult=analysisResult,
+            textFeedback=textFeedback,
             outputPath=outputPath,
             pauseSeconds=4.0,
         )
@@ -214,6 +216,7 @@ def _create_feedback_video_for_exercise(
             analysisResult=analysisResult,
             outputPath=outputPath,
             panelTitle="Bench Press (Side)",
+            textFeedback=textFeedback,
             pauseSeconds=2.0,
         )
 
@@ -224,6 +227,7 @@ def _create_feedback_video_for_exercise(
             analysisResult=analysisResult,
             outputPath=outputPath,
             panelTitle="Bench Press (Front)",
+            textFeedback=textFeedback,
             pauseSeconds=2.0,
         )
 
@@ -240,6 +244,7 @@ def _create_feedback_video_for_exercise(
                 "pull_asymmetry": "Try to finish the pull more evenly on both sides.",
             },
             positiveDetailLines=["Bottom hang, pull height, and top balance looked good."],
+            textFeedback=textFeedback,
             pauseSeconds=4.0,
         )
 
@@ -258,6 +263,7 @@ def _create_feedback_video_for_exercise(
                 "upper_arm_instability": "Keep your upper arm steadier during the curl.",
             },
             positiveDetailLines=["Range of motion and arm path looked good."],
+            textFeedback=textFeedback,
             pauseSeconds=4.0,
         )
 
@@ -276,6 +282,7 @@ def _create_feedback_video_for_exercise(
                 "upper_arm_instability": "Keep your upper arm more stable.",
             },
             positiveDetailLines=["Range of motion and arm position looked good."],
+            textFeedback=textFeedback,
             pauseSeconds=4.0,
         )
 
@@ -294,6 +301,7 @@ def _create_feedback_video_for_exercise(
                 "top_symmetry_mild_imbalance": "Try to level both arms out at the top.",
             },
             positiveDetailLines=["Press depth, lockout, and symmetry looked good."],
+            textFeedback=textFeedback,
             pauseSeconds=4.0,
         )
 
@@ -371,15 +379,16 @@ async def analyze_video(
         with resultJsonPath.open("w", encoding="utf-8") as resultFile:
             json.dump(result, resultFile, indent=2)
 
+        textFeedback = build_text_feedback(exercise, result)
         feedbackVideoPath = RESULTS_DIR / f"{runId}_{exercise}_feedback.mp4"
         feedbackVideo = _create_feedback_video_for_exercise(
             exercise=exercise,
             videoPath=str(uploadedPath),
             poseFrames=poseFrames,
             analysisResult=result,
+            textFeedback=textFeedback,
             outputPath=str(feedbackVideoPath),
         )
-        textFeedback = build_text_feedback(exercise, result)
 
         response = {
             "runId": runId,
