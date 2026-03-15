@@ -63,13 +63,12 @@ def main():
         options={
             "topElbowAngleDeg": 95,
             "topArmpitAngleDeg": 105,
+            "bottomElbowAngleDeg": 170,
             "leaveTopElbowDeg": 120,
+            "leaveBottomElbowDeg": 155,
             "hysteresisDeg": 6,
             "smoothWindow": 5,
             "requireArmpitForHeight": False,
-            "enableAngleSymmetry": True,
-            "symElbowDiffWarnDeg": 18,
-            "symArmpitDiffWarnDeg": 18,
         },
     )
 
@@ -83,10 +82,10 @@ def main():
         outputPath=str(outputVideoPath),
         panelTitle="Pull-Up",
         issueMessages={
+            "bottom_incomplete": "Lower into a deeper hang before the next rep.",
             "height_incomplete": "Pull higher before ending the rep.",
-            "pull_asymmetry": "Keep the pull more even on both sides.",
         },
-        positiveDetailLines=["Pull height and left/right balance looked good."],
+        positiveDetailLines=["Bottom hang and pull height looked good."],
         pauseSeconds=4.0,
     )
 

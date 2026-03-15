@@ -112,6 +112,11 @@ def build_rep_summaries_from_analysis_result(
 
         startFrame = repData.get("startFrameIndex")
         endFrame = repData.get("endFrameIndex")
+        pauseFrame = repData.get("pauseFrameIndex")
+        if not isinstance(pauseFrame, int):
+            pauseFrame = repData.get("topFrameIndex")
+        if not isinstance(pauseFrame, int):
+            pauseFrame = endFrame
         quality = repData.get("quality")
         issues = repData.get("issues", [])
 
@@ -145,6 +150,7 @@ def build_rep_summaries_from_analysis_result(
                 "rep": repNumber,
                 "startFrameIndex": startFrame,
                 "endFrameIndex": endFrame,
+                "pauseFrameIndex": pauseFrame,
                 "quality": quality,
                 "issues": issues,
                 "status": positiveStatus if isGoodRep else "Needs work:",
@@ -386,9 +392,11 @@ def create_exercise_feedback_video(
 
     repByEndFrame: Dict[int, Dict[str, Any]] = {}
     for summary in repSummaries:
-        endFrame = summary.get("endFrameIndex")
-        if isinstance(endFrame, int):
-            repByEndFrame[endFrame] = summary
+        pauseFrame = summary.get("pauseFrameIndex")
+        if not isinstance(pauseFrame, int):
+            pauseFrame = summary.get("endFrameIndex")
+        if isinstance(pauseFrame, int):
+            repByEndFrame[pauseFrame] = summary
 
     pauseFrames = max(0, int(round(fps * pauseSeconds)))
     panelWidth = max(280, int(round(width * 0.38)))

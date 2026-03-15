@@ -14,11 +14,6 @@ const EXERCISE_METADATA = {
     exerciseName: "Bench Press",
     view: "Side",
   },
-  squat_front: {
-    muscleGroup: "Legs",
-    exerciseName: "Squat",
-    view: "Front",
-  },
   squat_side: {
     muscleGroup: "Legs",
     exerciseName: "Squat",

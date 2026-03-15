@@ -7,16 +7,14 @@ from backend.core.biomechanics.angles import getLandmarkAngle
 
 class PullUpAnalyzer(BaseAnalyzer):
     """
-    Back-view pull-up analyzer (TOP-crossing rep count):
-      - Counts a rep when athlete ENTERS TOP zone (no dead-hang required)
-      - TOP detection: armpit angle if available, otherwise elbow angle fallback
-      - Symmetry (requested rule):
-            Compare LEFT vs RIGHT wrist-shoulder X *range* during the TOP phase
-            => similarity score in [0..1] (1 = identical ranges)
-      - Optional angle symmetry info (elbow/armpit diff snapshot)
+    Back-view pull-up analyzer (full ROM rep count):
+      - Counts a rep only after bottom -> top -> bottom
+      - Bottom check uses near-lockout elbow angle
+      - Top detection uses armpit angle if available, otherwise elbow angle fallback
 
-    Removed:
-      - wrist Y level check (not useful for pull-ups)
+    Current quality checks:
+      - Did the rep start and finish from a deep enough bottom hang
+      - Did the rep reach a high enough top position
     """
 
     def __init__(self):
@@ -31,32 +29,16 @@ class PullUpAnalyzer(BaseAnalyzer):
     ) -> Dict[str, Any]:
         options = options or {}
 
-        # ---------------------------
-        # Thresholds
-        # ---------------------------
-        TOP_ELBOW_ANGLE = float(options.get("topElbowAngleDeg", 95))
-        TOP_ARMPIT_ANGLE = float(options.get("topArmpitAngleDeg", 105))
-
-        # Must leave top before counting another rep
-        LEAVE_TOP_ELBOW = float(options.get("leaveTopElbowDeg", 120))
-
-        # Hysteresis + smoothing
-        HYST_DEG = float(options.get("hysteresisDeg", 6))
-        SMOOTH_WINDOW = int(options.get("smoothWindow", 5))
-
-        # Height rule
-        REQUIRE_ARMPIT_FOR_HEIGHT = bool(options.get("requireArmpitForHeight", False))
-
-        # Optional angle-based symmetry info
-        ENABLE_ANGLE_SYMMETRY = bool(options.get("enableAngleSymmetry", True))
-        SYM_ELBOW_DIFF_WARN = float(options.get("symElbowDiffWarnDeg", 18))
-        SYM_ARMPIT_DIFF_WARN = float(options.get("symArmpitDiffWarnDeg", 18))
-
-        # ---------------------------
-        # Helpers
-        # ---------------------------
-        def safe_avg(vals: List[float]) -> Optional[float]:
-            return sum(vals) / len(vals) if vals else None
+        topElbowAngleDeg = float(options.get("topElbowAngleDeg", 95))
+        topArmpitAngleDeg = float(options.get("topArmpitAngleDeg", 105))
+        bottomElbowAngleDeg = float(options.get("bottomElbowAngleDeg", 170))
+        leaveTopElbowDeg = float(options.get("leaveTopElbowDeg", 120))
+        leaveBottomElbowDeg = float(options.get("leaveBottomElbowDeg", 155))
+        hysteresisDeg = float(options.get("hysteresisDeg", 6))
+        smoothWindow = int(options.get("smoothWindow", 5))
+        requireArmpitForHeight = bool(options.get("requireArmpitForHeight", False))
+        enableSymmetryCheck = bool(options.get("enableSymmetryCheck", True))
+        topElbowDiffWarnDeg = float(options.get("topElbowDiffWarnDeg", 28))
 
         def avg2(a: Optional[float], b: Optional[float]) -> Optional[float]:
             if a is None and b is None:
@@ -67,248 +49,261 @@ class PullUpAnalyzer(BaseAnalyzer):
                 return a
             return (a + b) / 2.0
 
-        def range_of(xs: List[float]) -> Optional[float]:
-            if len(xs) < 2:
-                return None
-            return max(xs) - min(xs)
-
-        def range_similarity(r1: Optional[float], r2: Optional[float]) -> Optional[float]:
-            if r1 is None or r2 is None:
-                return None
-            eps = 1e-6
-            return 1.0 - abs(r1 - r2) / (r1 + r2 + eps)
-
-        # ---------------------------
-        # Outputs
-        # ---------------------------
         repCount = 0
         issues = []
         repFeedback: List[Dict[str, Any]] = []
+        warnings: List[str] = []
 
-        sym_elbow_diffs: List[float] = []
-        sym_armpit_diffs: List[float] = []
+        elbowBuf: Deque[float] = deque(maxlen=max(1, smoothWindow))
 
-        elbow_buf: Deque[float] = deque(maxlen=max(1, SMOOTH_WINDOW))
+        state = "UNKNOWN"  # BOTTOM_READY | UP_IN_REP | TOP_HIT | DOWN_TO_BOTTOM
+        pendingRep: Optional[Dict[str, Any]] = None
 
-        in_top = False
-        pending_rep: Optional[Dict[str, Any]] = None
-        dxL_samples: List[float] = []
-        dxR_samples: List[float] = []
-        top_phase_start_frame: Optional[int] = None
+        skippedMissingElbow = 0
+        validElbowFrames = 0
+        elbowMin = 999.0
+        elbowMax = -999.0
+        topHitFrames = 0
+        bottomReadyFrames = 0
+        armpitAvailableFrames = 0
+        topElbowDiffSamples: List[float] = []
 
-        # Debug metrics
-        skipped_missing_elbow = 0
-        valid_elbow_frames = 0
-        elbow_min = 999.0
-        elbow_max = -999.0
-        top_hit_frames = 0
-        leave_top_frames = 0
-        armpit_available_frames = 0
-
-        # ---------------------------
-        # Main loop
-        # ---------------------------
-        for pf in poseFrames:
-            if not getattr(pf, "hasPose", False):
+        for poseFrame in poseFrames:
+            if not getattr(poseFrame, "hasPose", False):
                 continue
 
-            lm = pf.landmarks
+            landmarks = poseFrame.landmarks
 
-            # Elbow angles
-            left_elbow = getLandmarkAngle(lm, "left_shoulder", "left_elbow", "left_wrist")
-            right_elbow = getLandmarkAngle(lm, "right_shoulder", "right_elbow", "right_wrist")
-            elbow_angle = avg2(left_elbow, right_elbow)
+            leftElbow = getLandmarkAngle(landmarks, "left_shoulder", "left_elbow", "left_wrist")
+            rightElbow = getLandmarkAngle(landmarks, "right_shoulder", "right_elbow", "right_wrist")
+            elbowAngle = avg2(leftElbow, rightElbow)
 
-            if elbow_angle is None:
-                skipped_missing_elbow += 1
+            if elbowAngle is None:
+                skippedMissingElbow += 1
                 continue
 
-            elbow_buf.append(float(elbow_angle))
-            elbow_s = sum(elbow_buf) / len(elbow_buf)
+            elbowBuf.append(float(elbowAngle))
+            elbowSmoothed = sum(elbowBuf) / len(elbowBuf)
 
-            valid_elbow_frames += 1
-            elbow_min = min(elbow_min, elbow_s)
-            elbow_max = max(elbow_max, elbow_s)
+            validElbowFrames += 1
+            elbowMin = min(elbowMin, elbowSmoothed)
+            elbowMax = max(elbowMax, elbowSmoothed)
 
-            # Armpit angle (optional)
-            left_armpit = getLandmarkAngle(lm, "left_elbow", "left_shoulder", "left_hip")
-            right_armpit = getLandmarkAngle(lm, "right_elbow", "right_shoulder", "right_hip")
-            armpit_angle = avg2(left_armpit, right_armpit)
-            if armpit_angle is not None:
-                armpit_available_frames += 1
+            leftArmpit = getLandmarkAngle(landmarks, "left_elbow", "left_shoulder", "left_hip")
+            rightArmpit = getLandmarkAngle(landmarks, "right_elbow", "right_shoulder", "right_hip")
+            armpitAngle = avg2(leftArmpit, rightArmpit)
+            if armpitAngle is not None:
+                armpitAvailableFrames += 1
 
-            # dx samples (wrist relative to shoulder)
-            lw = lm.get("left_wrist")
-            rw = lm.get("right_wrist")
-            ls = lm.get("left_shoulder")
-            rs = lm.get("right_shoulder")
+            bottomHit = elbowSmoothed >= (bottomElbowAngleDeg - hysteresisDeg)
+            leaveBottom = elbowSmoothed <= (leaveBottomElbowDeg + hysteresisDeg)
+            elbowTopOk = elbowSmoothed <= (topElbowAngleDeg + hysteresisDeg)
+            armpitTopOk = (
+                armpitAngle is not None
+                and float(armpitAngle) <= (topArmpitAngleDeg + hysteresisDeg)
+            )
+            topHit = armpitTopOk or elbowTopOk
+            leaveTop = elbowSmoothed >= (leaveTopElbowDeg - hysteresisDeg)
+            topElbowDiff = (
+                abs(float(leftElbow) - float(rightElbow))
+                if leftElbow is not None and rightElbow is not None
+                else None
+            )
 
-            dxL = dxR = None
-            if lw is not None and ls is not None:
-                dxL = float(lw.x) - float(ls.x)
-            if rw is not None and rs is not None:
-                dxR = float(rw.x) - float(rs.x)
+            if bottomHit:
+                bottomReadyFrames += 1
+            if topHit:
+                topHitFrames += 1
 
-            # Optional angle symmetry snapshot
-            angle_sym_bad = False
-            if ENABLE_ANGLE_SYMMETRY and left_elbow is not None and right_elbow is not None:
-                d = abs(left_elbow - right_elbow)
-                sym_elbow_diffs.append(d)
-                if d > SYM_ELBOW_DIFF_WARN:
-                    angle_sym_bad = True
+            if state == "UNKNOWN":
+                state = "BOTTOM_READY" if bottomHit else "UP_IN_REP"
 
-            if ENABLE_ANGLE_SYMMETRY and left_armpit is not None and right_armpit is not None:
-                d = abs(left_armpit - right_armpit)
-                sym_armpit_diffs.append(d)
-                if d > SYM_ARMPIT_DIFF_WARN:
-                    angle_sym_bad = True
+            if state == "BOTTOM_READY":
+                if leaveBottom:
+                    state = "UP_IN_REP"
+                    pendingRep = {
+                        "repIndex": repCount + 1,
+                        "startFrameIndex": getattr(poseFrame, "frameIndex", None),
+                        "heightOk": False,
+                        "bottomOk": True,
+                        "elbowDegAtTop": None,
+                        "armpitDegAtTop": None,
+                        "usedArmpitForTop": False,
+                    }
+                continue
 
-            # ---------------------------
-            # TOP detection
-            # ---------------------------
-            elbow_ok = elbow_s <= (TOP_ELBOW_ANGLE + HYST_DEG)
-            armpit_ok = (armpit_angle is not None) and (float(armpit_angle) <= (TOP_ARMPIT_ANGLE + HYST_DEG))
-            top_hit = armpit_ok or elbow_ok
-            if top_hit:
-                top_hit_frames += 1
-
-            left_top = elbow_s >= (LEAVE_TOP_ELBOW - HYST_DEG)
-            if left_top:
-                leave_top_frames += 1
-
-            # ---------------------------
-            # Rep counting: ENTER TOP -> start pending rep
-            # finalize rep on LEAVE TOP (for range similarity)
-            # ---------------------------
-            if not in_top:
-                if top_hit:
-                    repCount += 1
-                    in_top = True
-                    top_phase_start_frame = getattr(pf, "frameIndex", None)
-
-                    dxL_samples = []
-                    dxR_samples = []
-                    if dxL is not None:
-                        dxL_samples.append(dxL)
-                    if dxR is not None:
-                        dxR_samples.append(dxR)
-
-                    # Height ok
-                    if REQUIRE_ARMPIT_FOR_HEIGHT:
-                        height_ok = bool(armpit_ok)
-                    else:
-                        height_ok = bool(armpit_ok or elbow_ok)
-
-                    pending_rep = {
-                        "repIndex": repCount,
-                        "startFrameIndex": top_phase_start_frame,
-                        "heightOk": bool(height_ok),
-                        "elbowDegAtTop": round(elbow_s, 1),
-                        "armpitDegAtTop": None if armpit_angle is None else round(float(armpit_angle), 1),
-                        "usedArmpitForTop": bool(armpit_ok),
-                        "angleSymmetryBadAtTop": bool(angle_sym_bad),
+            if state == "UP_IN_REP":
+                if pendingRep is None:
+                    pendingRep = {
+                        "repIndex": repCount + 1,
+                        "startFrameIndex": getattr(poseFrame, "frameIndex", None),
+                        "heightOk": False,
+                        "bottomOk": False,
+                        "elbowDegAtTop": None,
+                        "armpitDegAtTop": None,
+                        "usedArmpitForTop": False,
                     }
 
-            else:
-                if dxL is not None:
-                    dxL_samples.append(dxL)
-                if dxR is not None:
-                    dxR_samples.append(dxR)
+                if topHit:
+                    state = "TOP_HIT"
+                    if requireArmpitForHeight:
+                        heightOk = bool(armpitTopOk)
+                    else:
+                        heightOk = bool(armpitTopOk or elbowTopOk)
+                    pendingRep["heightOk"] = bool(heightOk)
+                    pendingRep["topFrameIndex"] = getattr(poseFrame, "frameIndex", None)
+                    pendingRep["pauseFrameIndex"] = getattr(poseFrame, "frameIndex", None)
+                    pendingRep["elbowDegAtTop"] = round(elbowSmoothed, 1)
+                    pendingRep["armpitDegAtTop"] = (
+                        None if armpitAngle is None else round(float(armpitAngle), 1)
+                    )
+                    pendingRep["usedArmpitForTop"] = bool(armpitTopOk)
+                    pendingRep["topElbowDiffDeg"] = (
+                        None if topElbowDiff is None else round(float(topElbowDiff), 1)
+                    )
+                elif bottomHit:
+                    state = "BOTTOM_READY"
+                    pendingRep = None
+                continue
 
-                if left_top:
-                    in_top = False
+            if state == "TOP_HIT":
+                if topHit and pendingRep is not None:
+                    currentTopElbow = pendingRep.get("elbowDegAtTop")
+                    if currentTopElbow is None or elbowSmoothed <= currentTopElbow:
+                        pendingRep["topFrameIndex"] = getattr(poseFrame, "frameIndex", None)
+                        pendingRep["pauseFrameIndex"] = getattr(poseFrame, "frameIndex", None)
+                        pendingRep["elbowDegAtTop"] = round(elbowSmoothed, 1)
+                        pendingRep["armpitDegAtTop"] = (
+                            None if armpitAngle is None else round(float(armpitAngle), 1)
+                        )
+                        pendingRep["usedArmpitForTop"] = bool(armpitTopOk)
+                        pendingRep["topElbowDiffDeg"] = (
+                            None if topElbowDiff is None else round(float(topElbowDiff), 1)
+                        )
+                    continue
 
-                    rangeL = range_of(dxL_samples)
-                    rangeR = range_of(dxR_samples)
-                    sim = range_similarity(rangeL, rangeR)
+                if leaveTop:
+                    state = "DOWN_TO_BOTTOM"
+                continue
 
-                    # neutral if missing data
-                    symmetry_score = 1.0 if sim is None else max(0.0, min(1.0, sim))
-                    rep_issue_codes: List[str] = []
-                    if pending_rep is not None and not pending_rep.get("heightOk"):
-                        rep_issue_codes.append("height_incomplete")
-                    if symmetry_score < 0.85 or (pending_rep is not None and pending_rep.get("angleSymmetryBadAtTop")):
-                        rep_issue_codes.append("pull_asymmetry")
-                    rep_quality = 100.0 * (1.0 if pending_rep is not None and pending_rep.get("heightOk") else 0.0) * symmetry_score
+            if state == "DOWN_TO_BOTTOM":
+                if bottomHit:
+                    repCount += 1
+                    state = "BOTTOM_READY"
 
-                    if pending_rep is not None:
-                        pending_rep["endFrameIndex"] = getattr(pf, "frameIndex", None)
-                        pending_rep["quality"] = round(rep_quality, 1)
-                        pending_rep["issues"] = rep_issue_codes
-                        pending_rep["wristShoulderRangeLeft"] = None if rangeL is None else round(rangeL, 4)
-                        pending_rep["wristShoulderRangeRight"] = None if rangeR is None else round(rangeR, 4)
-                        pending_rep["wristShoulderRangeSimilarity"] = None if sim is None else round(sim, 3)
-                        pending_rep["symmetryScore"] = round(symmetry_score, 3)
+                    repIssueCodes: List[str] = []
+                    if pendingRep is not None and not pendingRep.get("bottomOk"):
+                        repIssueCodes.append("bottom_incomplete")
+                    if pendingRep is not None and not pendingRep.get("heightOk"):
+                        repIssueCodes.append("height_incomplete")
+                    symmetryOk = True
+                    if enableSymmetryCheck and pendingRep is not None:
+                        diff = pendingRep.get("topElbowDiffDeg")
+                        symmetryOk = not isinstance(diff, (int, float)) or diff <= topElbowDiffWarnDeg
+                        if not symmetryOk:
+                            repIssueCodes.append("pull_asymmetry")
 
-                        repFeedback.append(pending_rep)
+                    repQuality = 100.0
+                    if pendingRep is not None and not pendingRep.get("bottomOk"):
+                        repQuality -= 50.0
+                    if pendingRep is not None and not pendingRep.get("heightOk"):
+                        repQuality -= 50.0
+                    if enableSymmetryCheck and not symmetryOk:
+                        repQuality -= 15.0
 
-                    pending_rep = None
-                    dxL_samples = []
-                    dxR_samples = []
-                    top_phase_start_frame = None
+                    if pendingRep is not None:
+                        pendingRep["repIndex"] = repCount
+                        pendingRep["endFrameIndex"] = getattr(poseFrame, "frameIndex", None)
+                        pendingRep["quality"] = round(max(0.0, repQuality), 1)
+                        pendingRep["issues"] = repIssueCodes
+                        repFeedback.append(pendingRep)
+                        diff = pendingRep.get("topElbowDiffDeg")
+                        if isinstance(diff, (int, float)):
+                            topElbowDiffSamples.append(float(diff))
 
-        # ---------------------------
-        # Summaries -> issues
-        # ---------------------------
-        sym_elbow_avg = safe_avg(sym_elbow_diffs)
-        sym_armpit_avg = safe_avg(sym_armpit_diffs)
+                    pendingRep = None
+                continue
 
         if repCount == 0:
             issues.append(
                 self.buildIssue(
                     code="no_reps_detected",
-                    message="No pull-up reps detected. Try loosening TOP thresholds or check pose quality.",
+                    message="No pull-up reps detected. Check pose quality or loosen the ROM thresholds.",
                     severity="medium",
                 )
             )
 
-        if ENABLE_ANGLE_SYMMETRY and sym_elbow_avg is not None and sym_elbow_avg > SYM_ELBOW_DIFF_WARN:
+        bottomIssueCount = sum(
+            1 for rep in repFeedback if "bottom_incomplete" in (rep.get("issues") or [])
+        )
+        heightIssueCount = sum(
+            1 for rep in repFeedback if "height_incomplete" in (rep.get("issues") or [])
+        )
+        symmetryIssueCount = sum(
+            1 for rep in repFeedback if "pull_asymmetry" in (rep.get("issues") or [])
+        )
+
+        if repCount > 0 and bottomIssueCount > 0:
             issues.append(
                 self.buildIssue(
-                    code="elbow_asymmetry",
-                    message=f"Elbow angles differ often (avg diff={sym_elbow_avg:.1f}°).",
+                    code="bottom_position_issue",
+                    message=f"Bottom hang depth looked incomplete in {bottomIssueCount}/{repCount} rep(s).",
+                    severity="medium" if bottomIssueCount >= max(1, repCount // 2) else "low",
+                )
+            )
+
+        if repCount > 0 and heightIssueCount > 0:
+            issues.append(
+                self.buildIssue(
+                    code="top_position_issue",
+                    message=f"Top position looked incomplete in {heightIssueCount}/{repCount} rep(s).",
+                    severity="medium" if heightIssueCount >= max(1, repCount // 2) else "low",
+                )
+            )
+
+        if repCount > 0 and symmetryIssueCount > 0:
+            issues.append(
+                self.buildIssue(
+                    code="pull_asymmetry_issue",
+                    message=f"Top pull symmetry looked off in {symmetryIssueCount}/{repCount} rep(s).",
                     severity="low",
                 )
             )
 
-        if ENABLE_ANGLE_SYMMETRY and sym_armpit_avg is not None and sym_armpit_avg > SYM_ARMPIT_DIFF_WARN:
-            issues.append(
-                self.buildIssue(
-                    code="armpit_asymmetry",
-                    message=f"Armpit angles differ often (avg diff={sym_armpit_avg:.1f}°).",
-                    severity="low",
-                )
+        if pendingRep is not None:
+            warnings.append(
+                "The clip ended before one pull-up returned fully to the bottom position, so that final partial rep was not counted."
             )
 
-        # ---------------------------
-        # Scoring (continuous)
-        # ---------------------------
-        # RepScore = heightOk * symmetryScore
-        rep_scores: List[float] = []
-        for r in repFeedback:
-            height = 1.0 if r.get("heightOk") else 0.0
-            sym = float(r.get("symmetryScore", 1.0))
-            rep_scores.append(height * sym)
-
-        summaryScore = (sum(rep_scores) / len(rep_scores)) if rep_scores else None
+        repScores: List[float] = [
+            (1.0 if rep.get("bottomOk") else 0.0) * (1.0 if rep.get("heightOk") else 0.0)
+            for rep in repFeedback
+        ]
+        summaryScore = (sum(repScores) / len(repScores)) if repScores else None
 
         metrics = {
-            "topElbowAngleDeg": TOP_ELBOW_ANGLE,
-            "topArmpitAngleDeg": TOP_ARMPIT_ANGLE,
-            "leaveTopElbowDeg": LEAVE_TOP_ELBOW,
-            "hysteresisDeg": HYST_DEG,
-            "smoothWindow": SMOOTH_WINDOW,
-            "requireArmpitForHeight": REQUIRE_ARMPIT_FOR_HEIGHT,
-            "enableAngleSymmetry": ENABLE_ANGLE_SYMMETRY,
-            "symElbowDiffWarnDeg": SYM_ELBOW_DIFF_WARN,
-            "symArmpitDiffWarnDeg": SYM_ARMPIT_DIFF_WARN,
-            "skippedMissingElbowFrames": skipped_missing_elbow,
-            "validElbowFrames": valid_elbow_frames,
-            "elbowAngleMin": None if valid_elbow_frames == 0 else round(elbow_min, 1),
-            "elbowAngleMax": None if valid_elbow_frames == 0 else round(elbow_max, 1),
-            "topHitFrames": top_hit_frames,
-            "leaveTopFrames": leave_top_frames,
-            "armpitAvailableFrames": armpit_available_frames,
+            "topElbowAngleDeg": topElbowAngleDeg,
+            "topArmpitAngleDeg": topArmpitAngleDeg,
+            "bottomElbowAngleDeg": bottomElbowAngleDeg,
+            "leaveTopElbowDeg": leaveTopElbowDeg,
+            "leaveBottomElbowDeg": leaveBottomElbowDeg,
+            "hysteresisDeg": hysteresisDeg,
+            "smoothWindow": smoothWindow,
+            "requireArmpitForHeight": requireArmpitForHeight,
+            "enableSymmetryCheck": enableSymmetryCheck,
+            "topElbowDiffWarnDeg": topElbowDiffWarnDeg,
+            "skippedMissingElbowFrames": skippedMissingElbow,
+            "validElbowFrames": validElbowFrames,
+            "elbowAngleMin": None if validElbowFrames == 0 else round(elbowMin, 1),
+            "elbowAngleMax": None if validElbowFrames == 0 else round(elbowMax, 1),
+            "topHitFrames": topHitFrames,
+            "bottomReadyFrames": bottomReadyFrames,
+            "armpitAvailableFrames": armpitAvailableFrames,
+            "topElbowDiffAvgDeg": (
+                None
+                if not topElbowDiffSamples
+                else round(sum(topElbowDiffSamples) / len(topElbowDiffSamples), 1)
+            ),
         }
 
         return self.buildSuccessResult(
@@ -317,6 +312,6 @@ class PullUpAnalyzer(BaseAnalyzer):
             issues=issues,
             repFeedback=repFeedback,
             metrics=metrics,
-            warnings=[],
+            warnings=warnings,
             message="Back pull-up analysis completed.",
         )

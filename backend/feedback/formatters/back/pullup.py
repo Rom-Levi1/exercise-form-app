@@ -22,10 +22,20 @@ def build_pullup_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     rating = score_to_rating(score if isinstance(score, (int, float)) else None)
     rep_feedback = analysis.get("repFeedback") or []
 
+    bottom_reps = rep_issue_reps(rep_feedback, ("bottom_incomplete",))
     height_reps = rep_issue_reps(rep_feedback, ("height_incomplete",))
     asymmetry_reps = rep_issue_reps(rep_feedback, ("pull_asymmetry",))
-
     highlights: List[Dict[str, Any]] = []
+    if bottom_reps:
+        highlights.append(
+            {
+                "title": "Bottom hang is not deep enough",
+                "severity": "high" if len(bottom_reps) >= max(1, rep_count / 2) else "medium",
+                "details": f"You did not return to a deep enough bottom position in {len(bottom_reps)} of {rep_count} rep(s).",
+                "cue": "Lower all the way into a near-straight-arm hang before starting the next rep.",
+                "reps": bottom_reps,
+            }
+        )
     if height_reps:
         highlights.append(
             {
@@ -39,10 +49,10 @@ def build_pullup_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     if asymmetry_reps:
         highlights.append(
             {
-                "title": "Pulling pattern is uneven",
-                "severity": "medium",
-                "details": f"Left and right sides did not move evenly in {len(asymmetry_reps)} rep(s).",
-                "cue": "Keep both sides pulling with the same timing and range near the top.",
+                "title": "Pull looks slightly uneven",
+                "severity": "low",
+                "details": f"Left and right elbows reached the top a bit unevenly in {len(asymmetry_reps)} of {rep_count} rep(s).",
+                "cue": "Try to keep both arms finishing the pull at the same time near the top.",
                 "reps": asymmetry_reps,
             }
         )
@@ -50,10 +60,10 @@ def build_pullup_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     if not highlights:
         highlights.append(
             {
-                "title": "Pull-up rhythm looks solid",
+                "title": "Pull-up range looks solid",
                 "severity": None,
-                "details": f"Top position and left-right balance looked solid across {rep_count} rep(s).",
-                "cue": "Keep the same pull height and even rhythm from side to side.",
+                "details": f"Bottom hang, top position, and top balance looked solid across {rep_count} rep(s).",
+                "cue": "Keep using the same full bottom-to-top range each rep.",
                 "reps": [],
             }
         )
@@ -62,7 +72,7 @@ def build_pullup_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
         "overall": {
             "title": title_from_rating(rating),
             "rating": rating,
-            "summary": _summary(rep_count, len(height_reps), len(asymmetry_reps)),
+            "summary": _summary(rep_count, len(bottom_reps), len(height_reps), len(asymmetry_reps)),
         },
         "highlights": highlights,
         "repBreakdown": _rep_breakdown(rep_feedback),
@@ -70,25 +80,36 @@ def build_pullup_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _summary(rep_count: int, height_count: int, asymmetry_count: int) -> str:
-    if not any((height_count, asymmetry_count)):
+def _summary(rep_count: int, bottom_count: int, height_count: int, asymmetry_count: int) -> str:
+    if not any((bottom_count, height_count, asymmetry_count)):
         return f"{rep_count} pull-up rep(s) were analyzed and no major form issues were flagged."
     parts: List[str] = []
+    if bottom_count:
+        parts.append(f"bottom position in {bottom_count} rep(s)")
     if height_count:
         parts.append(f"top position in {height_count} rep(s)")
     if asymmetry_count:
-        parts.append(f"left-right balance in {asymmetry_count} rep(s)")
-    return f"{rep_count} pull-up rep(s) were analyzed. The main areas to clean up were " + " and ".join(parts) + "."
+        parts.append(f"top balance in {asymmetry_count} rep(s)")
+    return (
+        f"{rep_count} pull-up rep(s) were analyzed. "
+        f"The main areas to clean up were " + ", ".join(parts) + "."
+    )
 
 
 def _rep_breakdown(rep_feedback: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     breakdown = generic_rep_breakdown(rep_feedback)
     for item, rep in zip(breakdown, rep_feedback):
         issues = rep.get("issues") or []
-        if "height_incomplete" in issues:
+        if "bottom_incomplete" in issues and "height_incomplete" in issues:
+            item["label"] = "Short ROM"
+            item["details"] = "This rep did not reach a deep enough bottom or a high enough top."
+        elif "bottom_incomplete" in issues:
+            item["label"] = "Shallow bottom hang"
+            item["details"] = "This rep did not return to a deep enough bottom position."
+        elif "pull_asymmetry" in issues:
+            item["label"] = "Uneven top finish"
+            item["details"] = "Your left and right elbows did not finish the pull evenly at the top."
+        elif "height_incomplete" in issues:
             item["label"] = "Low top position"
             item["details"] = "This rep did not reach a high enough top position."
-        elif "pull_asymmetry" in issues:
-            item["label"] = "Uneven pull"
-            item["details"] = "One side moved differently from the other near the top."
     return breakdown

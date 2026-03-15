@@ -6,7 +6,6 @@ import "./ResultPage.css";
 
 const EXERCISE_LABELS = {
   squat_side: "Squat / Side View",
-  squat_front: "Squat / Front View",
   bench_side: "Bench Press / Side View",
   bench_front: "Bench Press / Front View",
   bicep_curl_side: "Bicep Curl / Side View",
@@ -54,7 +53,6 @@ function ResultPage({ onLogoClick, onBackToUpload }) {
   const repBreakdown = Array.isArray(textFeedback.repBreakdown)
     ? textFeedback.repBreakdown
     : [];
-  const warnings = Array.isArray(textFeedback.warnings) ? textFeedback.warnings : [];
 
   return (
     <div className="app upload-page">
@@ -153,18 +151,6 @@ function ResultPage({ onLogoClick, onBackToUpload }) {
                     </div>
                   )}
 
-                  {warnings.length > 0 && (
-                    <div className="feedback-section">
-                      <p className="feedback-eyebrow">Warnings</p>
-                      <div className="feedback-warning-list">
-                        {warnings.map((warning) => (
-                          <p key={warning} className="feedback-warning-item">
-                            {warning}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </aside>
               </div>
             </>

@@ -13,10 +13,33 @@ def build_side_bicep_curl_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     rating = score_to_rating(score if isinstance(score, (int, float)) else None)
     rep_feedback = analysis.get("repFeedback") or []
 
+    bottom_reps = rep_issue_reps(rep_feedback, ("bottom_position_incomplete",))
+    top_reps = rep_issue_reps(rep_feedback, ("top_position_incomplete",))
     rom_reps = rep_issue_reps(rep_feedback, ("rom_incomplete",))
     drift_reps = rep_issue_reps(rep_feedback, ("elbow_drift",))
+    upper_arm_reps = rep_issue_reps(rep_feedback, ("upper_arm_instability",))
 
     highlights: List[Dict[str, Any]] = []
+    if bottom_reps:
+        highlights.append(
+            {
+                "title": "Bottom position is too short",
+                "severity": "medium",
+                "details": f"You did not lower fully before curling in {len(bottom_reps)} of {rep_count} rep(s).",
+                "cue": "Open the elbow more at the bottom before starting the next curl.",
+                "reps": bottom_reps,
+            }
+        )
+    if top_reps:
+        highlights.append(
+            {
+                "title": "Top squeeze is too low",
+                "severity": "medium",
+                "details": f"You did not finish the curl high enough in {len(top_reps)} of {rep_count} rep(s).",
+                "cue": "Bring the weight higher at the top without letting the elbow drift forward.",
+                "reps": top_reps,
+            }
+        )
     if rom_reps:
         highlights.append(
             {
@@ -37,7 +60,16 @@ def build_side_bicep_curl_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
                 "reps": drift_reps,
             }
         )
-
+    if upper_arm_reps:
+        highlights.append(
+            {
+                "title": "Upper arm moves too much",
+                "severity": "medium",
+                "details": f"The upper arm shifted or rotated too much in {len(upper_arm_reps)} rep(s).",
+                "cue": "Keep the upper arm more fixed and let the forearm create the curl.",
+                "reps": upper_arm_reps,
+            }
+        )
     if not highlights:
         highlights.append(
             {
@@ -53,7 +85,14 @@ def build_side_bicep_curl_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
         "overall": {
             "title": title_from_rating(rating),
             "rating": rating,
-            "summary": _summary(rep_count, len(rom_reps), len(drift_reps)),
+            "summary": _summary(
+                rep_count,
+                len(bottom_reps),
+                len(top_reps),
+                len(rom_reps),
+                len(drift_reps),
+                len(upper_arm_reps),
+            ),
         },
         "highlights": highlights,
         "repBreakdown": _rep_breakdown(rep_feedback),
@@ -61,27 +100,75 @@ def build_side_bicep_curl_feedback(analysis: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _summary(rep_count: int, rom_count: int, drift_count: int) -> str:
-    if not any((rom_count, drift_count)):
+def _summary(
+    rep_count: int,
+    bottom_count: int,
+    top_count: int,
+    rom_count: int,
+    drift_count: int,
+    upper_arm_count: int,
+) -> str:
+    if not any((bottom_count, top_count, rom_count, drift_count, upper_arm_count)):
         return f"{rep_count} curl rep(s) were analyzed and no major form issues were flagged."
     parts: List[str] = []
+    if bottom_count:
+        parts.append(f"bottom position in {bottom_count} rep(s)")
+    if top_count:
+        parts.append(f"top position in {top_count} rep(s)")
     if rom_count:
         parts.append(f"range in {rom_count} rep(s)")
     if drift_count:
         parts.append(f"elbow position in {drift_count} rep(s)")
-    return f"{rep_count} curl rep(s) were analyzed. The main areas to clean up were " + " and ".join(parts) + "."
+    if upper_arm_count:
+        parts.append(f"upper-arm control in {upper_arm_count} rep(s)")
+    return f"{rep_count} curl rep(s) were analyzed. The main areas to clean up were " + ", ".join(parts) + "."
 
 
 def _rep_breakdown(rep_feedback: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     breakdown = generic_rep_breakdown(rep_feedback)
+    issue_details_map = {
+        "bottom_position_incomplete": (
+            "Short bottom",
+            "You did not lower enough before starting the curl.",
+        ),
+        "top_position_incomplete": (
+            "Low top",
+            "You did not finish the curl high enough.",
+        ),
+        "rom_incomplete": (
+            "Shortened curl",
+            "This rep did not use a full curling range.",
+        ),
+        "elbow_drift": (
+            "Elbow drift",
+            "Your elbow moved away from its starting position.",
+        ),
+        "upper_arm_instability": (
+            "Upper arm unstable",
+            "The upper arm shifted too much during the curl.",
+        ),
+    }
+
     for item, rep in zip(breakdown, rep_feedback):
         issues = rep.get("issues") or []
-        if "rom_incomplete" in issues:
-            item["label"] = "Shortened curl"
-            item["details"] = "This rep did not use a full curling range."
-        elif "elbow_drift" in issues:
-            item["label"] = "Elbow drift"
-            item["details"] = "Your elbow moved away from its starting position."
+        if not isinstance(issues, list) or not issues:
+            continue
+
+        rep_labels: List[str] = []
+        rep_details: List[str] = []
+        for issue in issues:
+            if not isinstance(issue, str):
+                continue
+            mapped = issue_details_map.get(issue)
+            if mapped is None:
+                continue
+            label, detail = mapped
+            rep_labels.append(label)
+            rep_details.append(detail)
+
+        if rep_labels:
+            item["label"] = " | ".join(rep_labels)
+            item["details"] = " ".join(rep_details)
     return breakdown
 
 

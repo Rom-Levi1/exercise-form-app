@@ -76,7 +76,12 @@ def main():
             "minRomDeg": 70,
             "bottomMarginDeg": 12,
             "topMarginDeg": 8,
+            "minDetectRomDeg": 35,
+            "detectionBottomSlackDeg": 12,
+            "detectionTopSlackDeg": 12,
+            "ascentStartRomDeg": 25,
             "elbowRelXDriftWarn": 0.27,
+            "upperArmAngleDriftWarn": 20.0,
         },
     )
 
@@ -91,9 +96,12 @@ def main():
         panelTitle="Bicep Curl",
         issueMessages={
             "rom_incomplete": "Use a fuller curl range of motion.",
+            "bottom_position_incomplete": "Lower the weight more before starting the curl.",
+            "top_position_incomplete": "Finish the curl higher at the top.",
             "elbow_drift": "Keep your elbow steadier near your torso.",
+            "upper_arm_instability": "Keep your upper arm steadier during the curl.",
         },
-        positiveDetailLines=["Range of motion and elbow control looked good."],
+        positiveDetailLines=["Range of motion and arm path looked good."],
         pauseSeconds=4.0,
     )
 

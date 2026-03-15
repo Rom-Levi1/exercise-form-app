@@ -7,12 +7,6 @@ try:
 except Exception:
     SideSquatAnalyzer = None
 
-try:
-    from backend.analyzers.legs.squat.front_squat_analyzer import FrontSquatAnalyzer
-except Exception:
-    FrontSquatAnalyzer = None
-
-
 # Bench press analyzers
 try:
     from backend.analyzers.chest.bench_press.front_bench_press_analyzer import FrontBenchPressAnalyzer
@@ -61,9 +55,6 @@ def _buildRegistry() -> Dict[str, Type]:
 
     if SideSquatAnalyzer is not None:
         registry["squat_side"] = SideSquatAnalyzer
-
-    if FrontSquatAnalyzer is not None:
-        registry["squat_front"] = FrontSquatAnalyzer
 
     if FrontBenchPressAnalyzer is not None:
         registry["bench_front"] = FrontBenchPressAnalyzer

@@ -12,6 +12,8 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
       - ROM validation per rep (min/max elbow angle + minimum ROM)
       - Upper-arm stability proxy (elbow position drift relative to shoulder)
       - Shoulder angle stability proxy (upper-arm orientation drift)
+
+    Supports automatic side selection so either arm can be analyzed from a side-view clip.
     """
 
     def __init__(self):
@@ -26,244 +28,78 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
     ) -> Dict[str, Any]:
         options = options or {}
 
-        side = str(options.get("side", "left")).lower()
-        if side not in ("left", "right"):
-            side = "left"
+        topAngleDeg = float(options.get("topAngleDeg", 160))
+        bottomAngleDeg = float(options.get("bottomAngleDeg", 85))
+        hysteresisDeg = float(options.get("hysteresisDeg", 5))
+        smoothWindow = int(options.get("smoothWindow", 5))
+        minRomDeg = float(options.get("minRomDeg", 65))
+        bottomMarginDeg = float(options.get("bottomMarginDeg", 5))
+        topMarginDeg = float(options.get("topMarginDeg", 5))
+        minDetectRomDeg = float(options.get("minDetectRomDeg", 35))
+        detectionBottomSlackDeg = float(options.get("detectionBottomSlackDeg", 12))
+        detectionTopSlackDeg = float(options.get("detectionTopSlackDeg", 12))
+        descentStartRomDeg = float(options.get("descentStartRomDeg", 25))
+        elbowRelXDriftWarn = float(options.get("elbowRelXDriftWarn", 0.05))
+        upperArmAngleDriftWarn = float(options.get("upperArmAngleDriftWarn", 20))
 
-        SHOULDER = f"{side}_shoulder"
-        ELBOW = f"{side}_elbow"
-        WRIST = f"{side}_wrist"
-        HIP = f"{side}_hip"
+        requestedSide = str(options.get("side", "auto")).lower()
+        if requestedSide not in ("left", "right", "auto"):
+            requestedSide = "auto"
 
-        # Rep thresholds
-        TOP_ANGLE = float(options.get("topAngleDeg", 160))
-        BOTTOM_ANGLE = float(options.get("bottomAngleDeg", 85))
-        HYST_DEG = float(options.get("hysteresisDeg", 5))
-        SMOOTH_WINDOW = int(options.get("smoothWindow", 5))
+        candidateSides = ("left", "right") if requestedSide == "auto" else (requestedSide,)
+        candidateResults = [
+            self._analyze_side(
+                poseFrames=poseFrames,
+                side=side,
+                topAngleDeg=topAngleDeg,
+                bottomAngleDeg=bottomAngleDeg,
+                hysteresisDeg=hysteresisDeg,
+                smoothWindow=smoothWindow,
+                minRomDeg=minRomDeg,
+                bottomMarginDeg=bottomMarginDeg,
+                topMarginDeg=topMarginDeg,
+                minDetectRomDeg=minDetectRomDeg,
+                detectionBottomSlackDeg=detectionBottomSlackDeg,
+                detectionTopSlackDeg=detectionTopSlackDeg,
+                descentStartRomDeg=descentStartRomDeg,
+                elbowRelXDriftWarn=elbowRelXDriftWarn,
+                upperArmAngleDriftWarn=upperArmAngleDriftWarn,
+            )
+            for side in candidateSides
+        ]
 
-        # ROM thresholds
-        MIN_ROM_DEG = float(options.get("minRomDeg", 65))
-        BOTTOM_MARGIN = float(options.get("bottomMarginDeg", 5))
-        TOP_MARGIN = float(options.get("topMarginDeg", 5))
+        bestResult = max(
+            candidateResults,
+            key=lambda result: (
+                result["repCount"],
+                result["goodReps"],
+                result["trackedFrameCount"],
+                result["avgRomDeg"],
+            ),
+        )
 
-        # Stability thresholds
-        ELBOW_REL_X_DRIFT_WARN = float(options.get("elbowRelXDriftWarn", 0.05))
-        UPPER_ARM_ANGLE_DRIFT_WARN = float(options.get("upperArmAngleDriftWarn", 20))
+        repCount = bestResult["repCount"]
+        repFeedback = bestResult["repFeedback"]
+        chosenSide = bestResult["side"]
+        elbowRelXDriftAvg = bestResult["elbowRelXDriftAvg"]
+        upperArmAngleDriftAvg = bestResult["upperArmAngleDriftAvg"]
 
-        def get_xy(lm: Dict[str, Any], name: str) -> Optional[Tuple[float, float]]:
-            p = lm.get(name)
-            if p is None:
-                return None
-            return (float(p.x), float(p.y))
-
-        def safe_avg(values: List[float]) -> Optional[float]:
-            return (sum(values) / len(values)) if values else None
-
-        def in_top_zone(angle: float) -> bool:
-            return angle >= (TOP_ANGLE - HYST_DEG)
-
-        def in_bottom_zone(angle: float) -> bool:
-            return angle <= (BOTTOM_ANGLE + HYST_DEG)
-
-        repCount = 0
         issues: List[Dict[str, Any]] = []
-        repFeedback: List[Dict[str, Any]] = []
         warnings: List[str] = []
-
-        angleBuf: Deque[float] = deque(maxlen=max(1, SMOOTH_WINDOW))
-        state = "UNKNOWN"  # "TOP_READY" | "DOWN_IN_REP"
-
-        # Global aggregates
-        rep_elbow_rel_x_drifts: List[float] = []
-        rep_upper_arm_angle_drifts: List[float] = []
-
-        # Per-rep accumulators
-        rep_elbow_min: Optional[float] = None
-        rep_elbow_max: Optional[float] = None
-        rep_elbow_rel_x_min: Optional[float] = None
-        rep_elbow_rel_x_max: Optional[float] = None
-        rep_upper_arm_angle_min: Optional[float] = None
-        rep_upper_arm_angle_max: Optional[float] = None
-        rep_start_frame_index: Optional[int] = None
-
-        for pf in poseFrames:
-            if not getattr(pf, "hasPose", False):
-                continue
-
-            lm = pf.landmarks
-            sh = get_xy(lm, SHOULDER)
-            el = get_xy(lm, ELBOW)
-            wr = get_xy(lm, WRIST)
-            hp = get_xy(lm, HIP)
-
-            if not (sh and el and wr):
-                continue
-
-            rawElbowAngle = getLandmarkAngle(lm, SHOULDER, ELBOW, WRIST)
-            if rawElbowAngle is None:
-                continue
-
-            angleBuf.append(float(rawElbowAngle))
-            elbowAngle = sum(angleBuf) / len(angleBuf)
-
-            # Approximate upper-arm angle at shoulder (elbow relative to torso line).
-            upperArmAngle = getLandmarkAngle(lm, ELBOW, SHOULDER, HIP) if hp else None
-
-            elbowRelX = el[0] - sh[0]
-
-            if state == "UNKNOWN":
-                state = "TOP_READY" if in_top_zone(elbowAngle) else "DOWN_IN_REP"
-                if state == "DOWN_IN_REP":
-                    rep_elbow_min = elbowAngle
-                    rep_elbow_max = elbowAngle
-                    rep_elbow_rel_x_min = elbowRelX
-                    rep_elbow_rel_x_max = elbowRelX
-                    rep_start_frame_index = getattr(pf, "frameIndex", None)
-                    if upperArmAngle is not None:
-                        rep_upper_arm_angle_min = float(upperArmAngle)
-                        rep_upper_arm_angle_max = float(upperArmAngle)
-
-            if state == "TOP_READY":
-                if in_bottom_zone(elbowAngle):
-                    state = "DOWN_IN_REP"
-                    rep_elbow_min = elbowAngle
-                    rep_elbow_max = elbowAngle
-                    rep_elbow_rel_x_min = elbowRelX
-                    rep_elbow_rel_x_max = elbowRelX
-                    rep_start_frame_index = getattr(pf, "frameIndex", None)
-                    rep_upper_arm_angle_min = (
-                        float(upperArmAngle) if upperArmAngle is not None else None
-                    )
-                    rep_upper_arm_angle_max = (
-                        float(upperArmAngle) if upperArmAngle is not None else None
-                    )
-                continue
-
-            # state == DOWN_IN_REP
-            rep_elbow_min = elbowAngle if rep_elbow_min is None else min(rep_elbow_min, elbowAngle)
-            rep_elbow_max = elbowAngle if rep_elbow_max is None else max(rep_elbow_max, elbowAngle)
-            rep_elbow_rel_x_min = (
-                elbowRelX if rep_elbow_rel_x_min is None else min(rep_elbow_rel_x_min, elbowRelX)
-            )
-            rep_elbow_rel_x_max = (
-                elbowRelX if rep_elbow_rel_x_max is None else max(rep_elbow_rel_x_max, elbowRelX)
-            )
-
-            if upperArmAngle is not None:
-                rep_upper_arm_angle_min = (
-                    float(upperArmAngle)
-                    if rep_upper_arm_angle_min is None
-                    else min(rep_upper_arm_angle_min, float(upperArmAngle))
-                )
-                rep_upper_arm_angle_max = (
-                    float(upperArmAngle)
-                    if rep_upper_arm_angle_max is None
-                    else max(rep_upper_arm_angle_max, float(upperArmAngle))
-                )
-
-            # Count rep when returning to top after entering bottom zone.
-            if in_top_zone(elbowAngle):
-                repCount += 1
-
-                rom = (
-                    (rep_elbow_max - rep_elbow_min)
-                    if (rep_elbow_min is not None and rep_elbow_max is not None)
-                    else 0.0
-                )
-                hitBottom = (rep_elbow_min is not None) and (
-                    rep_elbow_min <= (BOTTOM_ANGLE + BOTTOM_MARGIN)
-                )
-                hitTop = (rep_elbow_max is not None) and (rep_elbow_max >= (TOP_ANGLE - TOP_MARGIN))
-                romOk = hitBottom and hitTop and (rom >= MIN_ROM_DEG)
-
-                elbowRelXDrift = (
-                    (rep_elbow_rel_x_max - rep_elbow_rel_x_min)
-                    if (rep_elbow_rel_x_min is not None and rep_elbow_rel_x_max is not None)
-                    else 0.0
-                )
-                elbowStable = elbowRelXDrift < ELBOW_REL_X_DRIFT_WARN
-
-                upperArmAngleDrift = (
-                    (rep_upper_arm_angle_max - rep_upper_arm_angle_min)
-                    if (
-                        rep_upper_arm_angle_min is not None
-                        and rep_upper_arm_angle_max is not None
-                    )
-                    else None
-                )
-                upperArmStable = (
-                    None
-                    if upperArmAngleDrift is None
-                    else (upperArmAngleDrift < UPPER_ARM_ANGLE_DRIFT_WARN)
-                )
-
-                repIssuesCodes: List[str] = []
-                repQualityPenalty = 0.0
-                if not romOk:
-                    repIssuesCodes.append("rom_incomplete")
-                    repQualityPenalty += 40.0
-                if not elbowStable:
-                    repIssuesCodes.append("elbow_drift")
-                    repQualityPenalty += 30.0
-                if upperArmStable is False:
-                    repIssuesCodes.append("upper_arm_instability")
-                    repQualityPenalty += 30.0
-
-                repQuality = max(0.0, 100.0 - repQualityPenalty)
-
-                rep_elbow_rel_x_drifts.append(elbowRelXDrift)
-                if upperArmAngleDrift is not None:
-                    rep_upper_arm_angle_drifts.append(upperArmAngleDrift)
-
-                repFeedback.append(
-                    {
-                        "repIndex": repCount,
-                        "side": side,
-                        "startFrameIndex": rep_start_frame_index,
-                        "endFrameIndex": getattr(pf, "frameIndex", None),
-                        "quality": round(repQuality, 1),
-                        "issues": repIssuesCodes,
-                        "romOk": romOk,
-                        "romDeg": round(rom, 1),
-                        "minElbowDeg": None if rep_elbow_min is None else round(rep_elbow_min, 1),
-                        "maxElbowDeg": None if rep_elbow_max is None else round(rep_elbow_max, 1),
-                        "hitBottom": hitBottom,
-                        "hitTop": hitTop,
-                        "elbowStable": elbowStable,
-                        "elbowRelXDrift": round(elbowRelXDrift, 3),
-                        "upperArmStable": upperArmStable,
-                        "upperArmAngleDriftDeg": (
-                            None if upperArmAngleDrift is None else round(upperArmAngleDrift, 1)
-                        ),
-                    }
-                )
-
-                # Prepare for the next rep.
-                state = "TOP_READY"
-                rep_elbow_min = None
-                rep_elbow_max = None
-                rep_elbow_rel_x_min = None
-                rep_elbow_rel_x_max = None
-                rep_upper_arm_angle_min = None
-                rep_upper_arm_angle_max = None
-                rep_start_frame_index = None
-
-        elbowRelXDriftAvg = safe_avg(rep_elbow_rel_x_drifts)
-        upperArmAngleDriftAvg = safe_avg(rep_upper_arm_angle_drifts)
 
         if repCount == 0:
             issues.append(
                 self.buildIssue(
                     code="no_reps_detected",
                     message=(
-                        "No side tricep extension reps detected. Ensure shoulder/elbow/wrist are "
-                        "visible and tune thresholds if needed."
+                        "No side tricep extension reps detected. Ensure the working shoulder, elbow, "
+                        "and wrist are clearly visible through the full extension."
                     ),
                     severity="medium",
                 )
             )
 
-        if elbowRelXDriftAvg is not None and elbowRelXDriftAvg > ELBOW_REL_X_DRIFT_WARN:
+        if elbowRelXDriftAvg is not None and elbowRelXDriftAvg > elbowRelXDriftWarn:
             issues.append(
                 self.buildIssue(
                     code="elbow_drift",
@@ -276,7 +112,7 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
 
         if (
             upperArmAngleDriftAvg is not None
-            and upperArmAngleDriftAvg > UPPER_ARM_ANGLE_DRIFT_WARN
+            and upperArmAngleDriftAvg > upperArmAngleDriftWarn
         ):
             issues.append(
                 self.buildIssue(
@@ -289,41 +125,47 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
                 )
             )
 
-        def isGoodRep(rep: Dict[str, Any]) -> bool:
-            if not rep.get("romOk"):
-                return False
-            if not rep.get("elbowStable"):
-                return False
-            if rep.get("upperArmStable") is False:
-                return False
-            return True
+        if upperArmAngleDriftAvg is None:
+            warnings.append(
+                "Upper-arm stability check was unavailable in many frames (hip landmark missing)."
+            )
 
-        goodReps = sum(1 for rep in repFeedback if isGoodRep(rep))
-        summaryScore = (goodReps / repCount) if repCount > 0 else None
+        if requestedSide == "auto":
+            if repCount > 0:
+                warnings.append(
+                    f"Automatically analyzed the {chosenSide} arm based on clearer tricep-extension tracking."
+                )
+            else:
+                warnings.append(
+                    "Tried analyzing both arms automatically, but no clear reps were found."
+                )
+
+        summaryScore = (bestResult["goodReps"] / repCount) if repCount > 0 else None
 
         metrics = {
-            "side": side,
-            "topAngleDeg": TOP_ANGLE,
-            "bottomAngleDeg": BOTTOM_ANGLE,
-            "hysteresisDeg": HYST_DEG,
-            "smoothWindow": SMOOTH_WINDOW,
-            "minRomDeg": MIN_ROM_DEG,
-            "bottomMarginDeg": BOTTOM_MARGIN,
-            "topMarginDeg": TOP_MARGIN,
-            "elbowRelXDriftWarn": ELBOW_REL_X_DRIFT_WARN,
-            "upperArmAngleDriftWarn": UPPER_ARM_ANGLE_DRIFT_WARN,
+            "side": chosenSide,
+            "sideSelectionMode": requestedSide,
+            "topAngleDeg": topAngleDeg,
+            "bottomAngleDeg": bottomAngleDeg,
+            "hysteresisDeg": hysteresisDeg,
+            "smoothWindow": smoothWindow,
+            "minRomDeg": minRomDeg,
+            "bottomMarginDeg": bottomMarginDeg,
+            "topMarginDeg": topMarginDeg,
+            "minDetectRomDeg": minDetectRomDeg,
+            "detectionBottomSlackDeg": detectionBottomSlackDeg,
+            "detectionTopSlackDeg": detectionTopSlackDeg,
+            "descentStartRomDeg": descentStartRomDeg,
+            "elbowRelXDriftWarn": elbowRelXDriftWarn,
+            "upperArmAngleDriftWarn": upperArmAngleDriftWarn,
             "elbowRelXDriftAvg": (
                 None if elbowRelXDriftAvg is None else round(elbowRelXDriftAvg, 4)
             ),
             "upperArmAngleDriftAvg": (
                 None if upperArmAngleDriftAvg is None else round(upperArmAngleDriftAvg, 2)
             ),
+            "trackedFrameCount": bestResult["trackedFrameCount"],
         }
-
-        if upperArmAngleDriftAvg is None:
-            warnings.append(
-                "Upper-arm stability check was unavailable in many frames (hip landmark missing)."
-            )
 
         return self.buildSuccessResult(
             repCount=repCount,
@@ -334,3 +176,352 @@ class SideTricepExtensionAnalyzer(BaseAnalyzer):
             warnings=warnings,
             message="Side tricep extension analysis completed.",
         )
+
+    def _analyze_side(
+        self,
+        poseFrames: List[Any],
+        side: str,
+        topAngleDeg: float,
+        bottomAngleDeg: float,
+        hysteresisDeg: float,
+        smoothWindow: int,
+        minRomDeg: float,
+        bottomMarginDeg: float,
+        topMarginDeg: float,
+        minDetectRomDeg: float,
+        detectionBottomSlackDeg: float,
+        detectionTopSlackDeg: float,
+        descentStartRomDeg: float,
+        elbowRelXDriftWarn: float,
+        upperArmAngleDriftWarn: float,
+    ) -> Dict[str, Any]:
+        shoulderName = f"{side}_shoulder"
+        elbowName = f"{side}_elbow"
+        wristName = f"{side}_wrist"
+        hipName = f"{side}_hip"
+
+        def get_xy(lm: Dict[str, Any], name: str) -> Optional[Tuple[float, float]]:
+            point = lm.get(name)
+            if point is None:
+                return None
+            return (float(point.x), float(point.y))
+
+        def safe_avg(values: List[float]) -> Optional[float]:
+            return (sum(values) / len(values)) if values else None
+
+        def in_top_zone(angle: float) -> bool:
+            return angle >= (topAngleDeg - hysteresisDeg)
+
+        def in_bottom_zone(angle: float) -> bool:
+            return angle <= (bottomAngleDeg + hysteresisDeg)
+
+        def in_detection_top_zone(angle: float) -> bool:
+            return angle >= (topAngleDeg - hysteresisDeg - detectionTopSlackDeg)
+
+        def in_detection_bottom_zone(angle: float) -> bool:
+            return angle <= (bottomAngleDeg + hysteresisDeg + detectionBottomSlackDeg)
+
+        repCount = 0
+        repFeedback: List[Dict[str, Any]] = []
+
+        angleBuf: Deque[float] = deque(maxlen=max(1, smoothWindow))
+        state = "UNKNOWN"  # "TOP_READY" | "DOWN_IN_REP" | "TOP_FINISH"
+
+        repElbowRelXDrifts: List[float] = []
+        repUpperArmAngleDrifts: List[float] = []
+        trackedFrameCount = 0
+        repRomValues: List[float] = []
+
+        repElbowMin: Optional[float] = None
+        repElbowMax: Optional[float] = None
+        repElbowRelXMin: Optional[float] = None
+        repElbowRelXMax: Optional[float] = None
+        repUpperArmAngleMin: Optional[float] = None
+        repUpperArmAngleMax: Optional[float] = None
+        repStartFrameIndex: Optional[int] = None
+        repTopFrameIndex: Optional[int] = None
+        repEndFrameIndex: Optional[int] = None
+        topReadyPeakAngle: Optional[float] = None
+
+        def finalize_rep() -> None:
+            nonlocal repCount
+            nonlocal repElbowMin
+            nonlocal repElbowMax
+            nonlocal repElbowRelXMin
+            nonlocal repElbowRelXMax
+            nonlocal repUpperArmAngleMin
+            nonlocal repUpperArmAngleMax
+            nonlocal repStartFrameIndex
+            nonlocal repTopFrameIndex
+            nonlocal repEndFrameIndex
+
+            if repStartFrameIndex is None:
+                return
+
+            rom = (
+                (repElbowMax - repElbowMin)
+                if (repElbowMin is not None and repElbowMax is not None)
+                else 0.0
+            )
+            if rom < minDetectRomDeg:
+                repElbowMin = None
+                repElbowMax = None
+                repElbowRelXMin = None
+                repElbowRelXMax = None
+                repUpperArmAngleMin = None
+                repUpperArmAngleMax = None
+                repStartFrameIndex = None
+                repTopFrameIndex = None
+                repEndFrameIndex = None
+                return
+
+            repCount += 1
+            repRomValues.append(rom)
+
+            hitBottom = (repElbowMin is not None) and (
+                repElbowMin <= (bottomAngleDeg + bottomMarginDeg)
+            )
+            hitTop = (repElbowMax is not None) and (repElbowMax >= (topAngleDeg - topMarginDeg))
+            romOk = hitBottom and hitTop and (rom >= minRomDeg)
+
+            elbowRelXDrift = (
+                (repElbowRelXMax - repElbowRelXMin)
+                if (repElbowRelXMin is not None and repElbowRelXMax is not None)
+                else 0.0
+            )
+            elbowStable = elbowRelXDrift < elbowRelXDriftWarn
+            repElbowRelXDrifts.append(elbowRelXDrift)
+
+            upperArmAngleDrift = (
+                (repUpperArmAngleMax - repUpperArmAngleMin)
+                if (repUpperArmAngleMin is not None and repUpperArmAngleMax is not None)
+                else None
+            )
+            upperArmStable = (
+                None
+                if upperArmAngleDrift is None
+                else (upperArmAngleDrift < upperArmAngleDriftWarn)
+            )
+            if upperArmAngleDrift is not None:
+                repUpperArmAngleDrifts.append(upperArmAngleDrift)
+
+            repIssuesCodes: List[str] = []
+            repQualityPenalty = 0.0
+            if not hitBottom:
+                repIssuesCodes.append("bottom_position_shallow")
+                repQualityPenalty += 15.0
+            if not hitTop:
+                repIssuesCodes.append("lockout_incomplete")
+                repQualityPenalty += 25.0
+            if hitBottom and hitTop and rom < minRomDeg:
+                repIssuesCodes.append("rom_incomplete")
+                repQualityPenalty += 20.0
+            if not elbowStable:
+                repIssuesCodes.append("elbow_drift")
+                repQualityPenalty += 20.0
+            if upperArmStable is False:
+                repIssuesCodes.append("upper_arm_instability")
+                repQualityPenalty += 20.0
+
+            repQuality = max(0.0, 100.0 - repQualityPenalty)
+
+            repFeedback.append(
+                {
+                    "repIndex": repCount,
+                    "side": side,
+                    "startFrameIndex": repStartFrameIndex,
+                    "pauseFrameIndex": repTopFrameIndex,
+                    "endFrameIndex": repEndFrameIndex,
+                    "quality": round(repQuality, 1),
+                    "issues": repIssuesCodes,
+                    "romOk": romOk,
+                    "romDeg": round(rom, 1),
+                    "minElbowDeg": None if repElbowMin is None else round(repElbowMin, 1),
+                    "maxElbowDeg": None if repElbowMax is None else round(repElbowMax, 1),
+                    "hitBottom": hitBottom,
+                    "hitTop": hitTop,
+                    "elbowStable": elbowStable,
+                    "elbowRelXDrift": round(elbowRelXDrift, 3),
+                    "upperArmStable": upperArmStable,
+                    "upperArmAngleDriftDeg": (
+                        None if upperArmAngleDrift is None else round(upperArmAngleDrift, 1)
+                    ),
+                }
+            )
+
+            repElbowMin = None
+            repElbowMax = None
+            repElbowRelXMin = None
+            repElbowRelXMax = None
+            repUpperArmAngleMin = None
+            repUpperArmAngleMax = None
+            repStartFrameIndex = None
+            repTopFrameIndex = None
+            repEndFrameIndex = None
+
+        for poseFrame in poseFrames:
+            if not getattr(poseFrame, "hasPose", False):
+                continue
+
+            landmarks = poseFrame.landmarks
+            shoulder = get_xy(landmarks, shoulderName)
+            elbow = get_xy(landmarks, elbowName)
+            wrist = get_xy(landmarks, wristName)
+            hip = get_xy(landmarks, hipName)
+            if not (shoulder and elbow and wrist):
+                continue
+
+            rawElbowAngle = getLandmarkAngle(landmarks, shoulderName, elbowName, wristName)
+            if rawElbowAngle is None:
+                continue
+
+            trackedFrameCount += 1
+            angleBuf.append(float(rawElbowAngle))
+            elbowAngle = sum(angleBuf) / len(angleBuf)
+            elbowRelX = elbow[0] - shoulder[0]
+            upperArmAngle = (
+                getLandmarkAngle(landmarks, elbowName, shoulderName, hipName)
+                if hip is not None
+                else None
+            )
+
+            if state == "UNKNOWN":
+                state = "TOP_READY" if in_detection_top_zone(elbowAngle) else "DOWN_IN_REP"
+                if state == "DOWN_IN_REP":
+                    repElbowMin = elbowAngle
+                    repElbowMax = elbowAngle
+                    repElbowRelXMin = elbowRelX
+                    repElbowRelXMax = elbowRelX
+                    repStartFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repTopFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repEndFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    if upperArmAngle is not None:
+                        repUpperArmAngleMin = float(upperArmAngle)
+                        repUpperArmAngleMax = float(upperArmAngle)
+                else:
+                    topReadyPeakAngle = elbowAngle
+
+            if state == "TOP_READY":
+                topReadyPeakAngle = (
+                    elbowAngle
+                    if topReadyPeakAngle is None
+                    else max(topReadyPeakAngle, elbowAngle)
+                )
+                if (
+                    in_detection_bottom_zone(elbowAngle)
+                    or (
+                        topReadyPeakAngle is not None
+                        and (topReadyPeakAngle - elbowAngle) >= descentStartRomDeg
+                    )
+                ):
+                    state = "DOWN_IN_REP"
+                    repElbowMin = elbowAngle
+                    repElbowMax = elbowAngle
+                    repElbowRelXMin = elbowRelX
+                    repElbowRelXMax = elbowRelX
+                    repStartFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repTopFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repEndFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repUpperArmAngleMin = (
+                        float(upperArmAngle) if upperArmAngle is not None else None
+                    )
+                    repUpperArmAngleMax = (
+                        float(upperArmAngle) if upperArmAngle is not None else None
+                    )
+                    topReadyPeakAngle = None
+                continue
+
+            if state == "TOP_FINISH":
+                if repElbowMax is None or elbowAngle >= repElbowMax:
+                    repElbowMax = elbowAngle
+                    repTopFrameIndex = getattr(poseFrame, "frameIndex", None)
+                repEndFrameIndex = getattr(poseFrame, "frameIndex", None)
+
+                if upperArmAngle is not None:
+                    repUpperArmAngleMin = (
+                        float(upperArmAngle)
+                        if repUpperArmAngleMin is None
+                        else min(repUpperArmAngleMin, float(upperArmAngle))
+                    )
+                    repUpperArmAngleMax = (
+                        float(upperArmAngle)
+                        if repUpperArmAngleMax is None
+                        else max(repUpperArmAngleMax, float(upperArmAngle))
+                    )
+
+                if in_detection_top_zone(elbowAngle):
+                    continue
+
+                finalize_rep()
+                state = "TOP_READY"
+                topReadyPeakAngle = elbowAngle
+
+                if in_detection_bottom_zone(elbowAngle):
+                    state = "DOWN_IN_REP"
+                    repElbowMin = elbowAngle
+                    repElbowMax = elbowAngle
+                    repElbowRelXMin = elbowRelX
+                    repElbowRelXMax = elbowRelX
+                    repStartFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repTopFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repEndFrameIndex = getattr(poseFrame, "frameIndex", None)
+                    repUpperArmAngleMin = (
+                        float(upperArmAngle) if upperArmAngle is not None else None
+                    )
+                    repUpperArmAngleMax = (
+                        float(upperArmAngle) if upperArmAngle is not None else None
+                    )
+                    topReadyPeakAngle = None
+                continue
+
+            repElbowMin = elbowAngle if repElbowMin is None else min(repElbowMin, elbowAngle)
+            if repElbowMax is None or elbowAngle >= repElbowMax:
+                repElbowMax = elbowAngle
+                repTopFrameIndex = getattr(poseFrame, "frameIndex", None)
+            repEndFrameIndex = getattr(poseFrame, "frameIndex", None)
+            repElbowRelXMin = (
+                elbowRelX if repElbowRelXMin is None else min(repElbowRelXMin, elbowRelX)
+            )
+            repElbowRelXMax = (
+                elbowRelX if repElbowRelXMax is None else max(repElbowRelXMax, elbowRelX)
+            )
+
+            if upperArmAngle is not None:
+                repUpperArmAngleMin = (
+                    float(upperArmAngle)
+                    if repUpperArmAngleMin is None
+                    else min(repUpperArmAngleMin, float(upperArmAngle))
+                )
+                repUpperArmAngleMax = (
+                    float(upperArmAngle)
+                    if repUpperArmAngleMax is None
+                    else max(repUpperArmAngleMax, float(upperArmAngle))
+                )
+
+            if in_detection_top_zone(elbowAngle) and (
+                repElbowMax is not None
+                and repElbowMin is not None
+                and (repElbowMax - repElbowMin) >= minDetectRomDeg
+            ):
+                state = "TOP_FINISH"
+                continue
+
+        if state == "TOP_FINISH":
+            finalize_rep()
+
+        goodReps = sum(
+            1
+            for rep in repFeedback
+            if rep.get("romOk") and rep.get("elbowStable") and rep.get("upperArmStable") is not False
+        )
+
+        return {
+            "side": side,
+            "repCount": repCount,
+            "goodReps": goodReps,
+            "repFeedback": repFeedback,
+            "elbowRelXDriftAvg": safe_avg(repElbowRelXDrifts),
+            "upperArmAngleDriftAvg": safe_avg(repUpperArmAngleDrifts),
+            "trackedFrameCount": trackedFrameCount,
+            "avgRomDeg": safe_avg(repRomValues) or 0.0,
+        }

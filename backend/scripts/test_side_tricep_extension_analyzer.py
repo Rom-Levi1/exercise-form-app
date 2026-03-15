@@ -17,12 +17,12 @@ def main():
     if len(sys.argv) < 2:
         print(
             "Usage: python backend/scripts/test_side_tricep_extension_analyzer.py <video_path> "
-            "[left|right] [output_json_path] [output_video_path]"
+            "[left|right|auto] [output_json_path] [output_video_path]"
         )
         return
 
     videoPath = sys.argv[1]
-    sideArg = sys.argv[2] if len(sys.argv) >= 3 else "left"
+    sideArg = sys.argv[2] if len(sys.argv) >= 3 else "auto"
     outputPathArg = sys.argv[3] if len(sys.argv) >= 4 else None
     outputVideoPathArg = sys.argv[4] if len(sys.argv) >= 5 else None
 
@@ -80,6 +80,8 @@ def main():
         panelTitle="Tricep Extension",
         issueMessages={
             "rom_incomplete": "Use a fuller range of motion.",
+            "bottom_position_shallow": "Bend more before starting the extension.",
+            "lockout_incomplete": "Finish with a stronger elbow lockout.",
             "elbow_drift": "Keep your elbow in a steadier position.",
             "upper_arm_instability": "Keep your upper arm more stable.",
         },

@@ -35,9 +35,10 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
         # Rep detection thresholds
         topElbowThreshold = float(options.get("topElbowThreshold", 130.0))
         bottomElbowThreshold = float(options.get("bottomElbowThreshold", 95.0))
+        repDetectionMinPressHeight = float(options.get("repDetectionMinPressHeight", 0.10))
 
         # Per-rep quality thresholds
-        bottomTooShallowThreshold = float(options.get("bottomTooShallowThreshold", 110.0))
+        bottomTooShallowThreshold = float(options.get("bottomTooShallowThreshold", 45.0))
         lockoutIncompleteThreshold = float(options.get("lockoutIncompleteThreshold", 145.0))
         minPressHeightThreshold = float(options.get("minPressHeightThreshold", 0.10))
 
@@ -45,12 +46,14 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
         highTopImbalanceThreshold = float(options.get("highTopImbalanceThreshold", 0.14))
 
         avgElbowAngles: List[Optional[float]] = []
+        avgArmpitAngles: List[Optional[float]] = []
         pressHeights: List[Optional[float]] = []
         topLevelDiffs: List[Optional[float]] = []
 
         for frame in poseFrames:
             if not frame.hasPose:
                 avgElbowAngles.append(None)
+                avgArmpitAngles.append(None)
                 pressHeights.append(None)
                 topLevelDiffs.append(None)
                 continue
@@ -58,19 +61,23 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
             landmarks = frame.landmarks
 
             avgElbowAngle = self._getAverageElbowAngle(landmarks)
+            avgArmpitAngle = self._getAverageArmpitAngle(landmarks)
             pressHeight = self._getPressHeightScore(landmarks)
             topLevelDiff = self._getTopLevelImbalance(landmarks)
 
             avgElbowAngles.append(avgElbowAngle)
+            avgArmpitAngles.append(avgArmpitAngle)
             pressHeights.append(pressHeight)
             topLevelDiffs.append(topLevelDiff)
 
         validElbowAngles = [v for v in avgElbowAngles if v is not None]
+        validArmpitAngles = [v for v in avgArmpitAngles if v is not None]
         validPressHeights = [v for v in pressHeights if v is not None]
         validTopLevelDiffs = [v for v in topLevelDiffs if v is not None]
 
         totalFrames = len(poseFrames)
         validElbowFrames = len(validElbowAngles)
+        validArmpitFrames = len(validArmpitAngles)
         validPressHeightFrames = len(validPressHeights)
         validTopLevelFrames = len(validTopLevelDiffs)
 
@@ -81,13 +88,16 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
             )
 
         smoothedElbowAngles = self._movingAverageOptional(avgElbowAngles, windowSize=5)
+        smoothedArmpitAngles = self._movingAverageOptional(avgArmpitAngles, windowSize=5)
         smoothedPressHeights = self._movingAverageOptional(pressHeights, windowSize=5)
         smoothedTopLevelDiffs = self._movingAverageOptional(topLevelDiffs, windowSize=5)
 
         repCount, repWindows = self._detectPressRepWindows(
             smoothedElbowAngles,
+            smoothedPressHeights,
             topThreshold=topElbowThreshold,
             bottomThreshold=bottomElbowThreshold,
+            minPressHeightThreshold=repDetectionMinPressHeight,
         )
 
         issues: List[Dict[str, Any]] = []
@@ -95,6 +105,7 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
         repFeedback: List[Dict[str, Any]] = []
 
         validElbowRatio = validElbowFrames / totalFrames if totalFrames > 0 else 0.0
+        validArmpitRatio = validArmpitFrames / totalFrames if totalFrames > 0 else 0.0
         validPressHeightRatio = validPressHeightFrames / totalFrames if totalFrames > 0 else 0.0
         validTopLevelRatio = validTopLevelFrames / totalFrames if totalFrames > 0 else 0.0
 
@@ -108,12 +119,17 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                 "Wrist/shoulder tracking quality was low for many frames; top-reach feedback may be less reliable."
             )
 
+        if validArmpitRatio < 0.6:
+            warnings.append(
+                "Shoulder/upper-arm tracking quality was low for many frames; bottom-depth feedback may be less reliable."
+            )
+
         if validTopLevelRatio < 0.6:
             warnings.append(
                 "Left/right wrist tracking quality was low for many frames; symmetry feedback may be less reliable."
             )
 
-        perRepBottomElbowAngles: List[float] = []
+        perRepBottomArmpitAngles: List[float] = []
         perRepTopElbowAngles: List[float] = []
         perRepTopPressHeights: List[float] = []
         perRepTopLevelDiffs: List[float] = []
@@ -134,6 +150,9 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
             repElbowWindow = [
                 value for value in smoothedElbowAngles[startFrame:endFrame + 1] if value is not None
             ]
+            repArmpitWindow = [
+                value for value in smoothedArmpitAngles[startFrame:endFrame + 1] if value is not None
+            ]
             repPressHeightWindow = [
                 value for value in smoothedPressHeights[startFrame:endFrame + 1] if value is not None
             ]
@@ -145,13 +164,13 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                 if value is not None
             ]
 
-            repBottomElbowAngle = min(repElbowWindow) if repElbowWindow else None
+            repBottomArmpitAngle = min(repArmpitWindow) if repArmpitWindow else None
             repTopElbowAngle = max(repElbowWindow) if repElbowWindow else None
             repTopPressHeight = max(repPressHeightWindow) if repPressHeightWindow else None
             repTopLevelDiff = max(repTopLevelWindow) if repTopLevelWindow else None
 
-            if repBottomElbowAngle is not None:
-                perRepBottomElbowAngles.append(repBottomElbowAngle)
+            if repBottomArmpitAngle is not None:
+                perRepBottomArmpitAngles.append(repBottomArmpitAngle)
 
             if repTopElbowAngle is not None:
                 perRepTopElbowAngles.append(repTopElbowAngle)
@@ -162,10 +181,10 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
             if repTopLevelDiff is not None:
                 perRepTopLevelDiffs.append(repTopLevelDiff)
 
-            # --- Bottom elbow bend ---
-            # Lower elbow angle at the bottom means they lowered more.
-            if repBottomElbowAngle is not None:
-                if repBottomElbowAngle > bottomTooShallowThreshold:
+            # --- Bottom shoulder/armpit depth ---
+            # Lower armpit angle at the bottom means the upper arm came down further.
+            if repBottomArmpitAngle is not None:
+                if repBottomArmpitAngle > bottomTooShallowThreshold:
                     repIssuesCodes.append("bottom_bend_shallow")
                     repQualityPenalties += 12
                     bottomBendIssueCount += 1
@@ -204,14 +223,17 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                     "quality": round(repQuality, 1),
                     "issues": repIssuesCodes,
                     "startFrameIndex": startFrame,
+                    "pauseFrameIndex": topFrame,
                     "topFrameIndex": topFrame,
                     "endFrameIndex": endFrame,
                     "checks": {
                         "elbowAngle": {
-                            "bottomAvgElbowAngleDeg": round(repBottomElbowAngle, 2)
-                            if repBottomElbowAngle is not None else None,
                             "topAvgElbowAngleDeg": round(repTopElbowAngle, 2)
                             if repTopElbowAngle is not None else None,
+                        },
+                        "bottomDepth": {
+                            "minAvgArmpitAngleDeg": round(repBottomArmpitAngle, 2)
+                            if repBottomArmpitAngle is not None else None,
                         },
                         "topReach": {
                             "maxNormalizedWristAboveShoulder": round(repTopPressHeight, 4)
@@ -279,6 +301,9 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
         minElbowAngle = min(validElbowAngles) if validElbowAngles else None
         maxElbowAngle = max(validElbowAngles) if validElbowAngles else None
         avgElbowAngle = (sum(validElbowAngles) / len(validElbowAngles)) if validElbowAngles else None
+        minArmpitAngle = min(validArmpitAngles) if validArmpitAngles else None
+        maxArmpitAngle = max(validArmpitAngles) if validArmpitAngles else None
+        avgArmpitAngle = (sum(validArmpitAngles) / len(validArmpitAngles)) if validArmpitAngles else None
 
         minPressHeight = min(validPressHeights) if validPressHeights else None
         maxPressHeight = max(validPressHeights) if validPressHeights else None
@@ -294,6 +319,8 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                 "totalFrames": totalFrames,
                 "validElbowFrames": validElbowFrames,
                 "validElbowRatio": round(validElbowRatio, 4),
+                "validArmpitFrames": validArmpitFrames,
+                "validArmpitRatio": round(validArmpitRatio, 4),
                 "validPressHeightFrames": validPressHeightFrames,
                 "validPressHeightRatio": round(validPressHeightRatio, 4),
                 "validTopLevelFrames": validTopLevelFrames,
@@ -304,6 +331,11 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                     "min": round(minElbowAngle, 2) if minElbowAngle is not None else None,
                     "max": round(maxElbowAngle, 2) if maxElbowAngle is not None else None,
                     "avg": round(avgElbowAngle, 2) if avgElbowAngle is not None else None,
+                },
+                "avgLeftRightArmpitAngleDeg": {
+                    "min": round(minArmpitAngle, 2) if minArmpitAngle is not None else None,
+                    "max": round(maxArmpitAngle, 2) if maxArmpitAngle is not None else None,
+                    "avg": round(avgArmpitAngle, 2) if avgArmpitAngle is not None else None,
                 },
                 "normalizedWristAboveShoulder": {
                     "min": round(minPressHeight, 4) if minPressHeight is not None else None,
@@ -321,10 +353,12 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                 "lockoutIssueCount": lockoutIssueCount,
                 "topReachIssueCount": topReachIssueCount,
                 "symmetryIssueCount": symmetryIssueCount,
-                "perRepBottomElbowAngles": [round(v, 2) for v in perRepBottomElbowAngles],
+                "bottomTooShallowThresholdDeg": round(bottomTooShallowThreshold, 2),
+                "perRepBottomArmpitAngles": [round(v, 2) for v in perRepBottomArmpitAngles],
                 "perRepTopElbowAngles": [round(v, 2) for v in perRepTopElbowAngles],
                 "perRepTopPressHeights": [round(v, 4) for v in perRepTopPressHeights],
                 "perRepTopLevelDiffs": [round(v, 4) for v in perRepTopLevelDiffs],
+                "repDetectionMinPressHeight": round(repDetectionMinPressHeight, 4),
             },
         }
 
@@ -335,8 +369,32 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
             repFeedback=repFeedback,
             metrics=metrics,
             warnings=warnings,
-            message="Front-view shoulder press analysis completed (elbow angle + symmetry + top reach checks).",
+            message="Front-view shoulder press analysis completed (bottom depth + top reach + lockout + symmetry checks).",
         )
+
+    def _getAverageArmpitAngle(self, landmarks: dict) -> Optional[float]:
+        """
+        Average shoulder/armpit angle using angle(elbow, shoulder, hip).
+        Falls back to whichever side is available.
+        """
+        leftArmpitAngle = getLandmarkAngle(
+            landmarks,
+            "left_elbow",
+            "left_shoulder",
+            "left_hip",
+        )
+        rightArmpitAngle = getLandmarkAngle(
+            landmarks,
+            "right_elbow",
+            "right_shoulder",
+            "right_hip",
+        )
+
+        available = [v for v in [leftArmpitAngle, rightArmpitAngle] if v is not None]
+        if not available:
+            return None
+
+        return sum(available) / len(available)
 
     def _getAverageElbowAngle(self, landmarks: dict) -> Optional[float]:
         """
@@ -439,11 +497,13 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
     def _detectPressRepWindows(
         self,
         elbowAngles: List[Optional[float]],
+        pressHeights: List[Optional[float]],
         topThreshold: float = 155.0,
         bottomThreshold: float = 95.0,
+        minPressHeightThreshold: float = 0.10,
     ) -> Tuple[int, List[Dict[str, int]]]:
         """
-        Detect shoulder press reps using average elbow angle.
+        Detect shoulder press reps using elbow angle plus wrist height.
 
         A rep is:
         bottom -> press up to top -> lower back to bottom
@@ -459,8 +519,10 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
         repStartFrameIndex: Optional[int] = None
         topFrameIndex: Optional[int] = None
         lastBottomFrameIndex: Optional[int] = None
+        bestTopPressHeight: Optional[float] = None
 
         for frameIndex, angle in enumerate(elbowAngles):
+            pressHeight = pressHeights[frameIndex] if frameIndex < len(pressHeights) else None
             if angle is None:
                 continue
 
@@ -478,30 +540,48 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                     state = "up"
                     repStartFrameIndex = lastBottomFrameIndex if lastBottomFrameIndex is not None else frameIndex
                     topFrameIndex = None
+                    bestTopPressHeight = None
 
             elif state == "up":
-                if angle >= topThreshold:
+                if pressHeight is not None:
+                    if bestTopPressHeight is None or pressHeight > bestTopPressHeight:
+                        bestTopPressHeight = pressHeight
+                        topFrameIndex = frameIndex
+
+                if angle >= topThreshold and (
+                    bestTopPressHeight is not None
+                    and bestTopPressHeight >= minPressHeightThreshold
+                ):
                     state = "top"
-                    topFrameIndex = frameIndex
                 elif angle <= bottomThreshold:
                     state = "bottom"
                     lastBottomFrameIndex = frameIndex
                     repStartFrameIndex = None
                     topFrameIndex = None
+                    bestTopPressHeight = None
 
             elif state == "top":
-                if topFrameIndex is None:
-                    topFrameIndex = frameIndex
+                if pressHeight is not None:
+                    if bestTopPressHeight is None or pressHeight >= bestTopPressHeight:
+                        bestTopPressHeight = pressHeight
+                        topFrameIndex = frameIndex
 
                 if angle < topThreshold - 5:
                     state = "down"
 
             elif state == "down":
-                if angle >= topThreshold and topFrameIndex is None:
-                    topFrameIndex = frameIndex
+                if pressHeight is not None:
+                    if bestTopPressHeight is None or pressHeight >= bestTopPressHeight:
+                        bestTopPressHeight = pressHeight
+                        topFrameIndex = frameIndex
 
                 if angle <= bottomThreshold:
-                    if repStartFrameIndex is not None and topFrameIndex is not None:
+                    if (
+                        repStartFrameIndex is not None
+                        and topFrameIndex is not None
+                        and bestTopPressHeight is not None
+                        and bestTopPressHeight >= minPressHeightThreshold
+                    ):
                         repWindows.append(
                             {
                                 "startFrameIndex": repStartFrameIndex,
@@ -514,12 +594,14 @@ class FrontShoulderPressAnalyzer(BaseAnalyzer):
                     lastBottomFrameIndex = frameIndex
                     repStartFrameIndex = None
                     topFrameIndex = None
+                    bestTopPressHeight = None
 
-                elif angle >= topThreshold:
+                elif angle >= topThreshold and (
+                    bestTopPressHeight is not None
+                    and bestTopPressHeight >= minPressHeightThreshold
+                ):
                     # Went back to top without returning to bottom yet
                     state = "top"
-                    if topFrameIndex is None:
-                        topFrameIndex = frameIndex
 
             elif state == "mid":
                 if angle <= bottomThreshold:

@@ -12,7 +12,6 @@ from fastapi.staticfiles import StaticFiles
 from backend.analyzers.registry import getAnalyzer, getSupportedExercises
 from backend.core.pose.mediapipe_extractor import extract_pose_frames
 from backend.core.video.bench_feedback_video import create_bench_feedback_video
-from backend.core.video.front_squat_feedback_video import create_front_squat_feedback_video
 from backend.core.video.squat_feedback_video import create_squat_feedback_video
 from backend.core.video.standard_feedback_video import create_standard_feedback_video
 from backend.feedback.build_text_feedback import build_text_feedback
@@ -131,13 +130,14 @@ def _exercise_default_options(exercise: str, side: Optional[str]) -> Dict[str, A
         return {
             "topElbowAngleDeg": 95,
             "topArmpitAngleDeg": 105,
+            "bottomElbowAngleDeg": 170,
             "leaveTopElbowDeg": 120,
+            "leaveBottomElbowDeg": 155,
             "hysteresisDeg": 6,
             "smoothWindow": 5,
             "requireArmpitForHeight": False,
-            "enableAngleSymmetry": True,
-            "symElbowDiffWarnDeg": 18,
-            "symArmpitDiffWarnDeg": 18,
+            "enableSymmetryCheck": True,
+            "topElbowDiffWarnDeg": 28,
         }
 
     if exercise == "bicep_curl_side":
@@ -150,12 +150,17 @@ def _exercise_default_options(exercise: str, side: Optional[str]) -> Dict[str, A
             "minRomDeg": 70,
             "bottomMarginDeg": 12,
             "topMarginDeg": 8,
+            "minDetectRomDeg": 35,
+            "detectionBottomSlackDeg": 12,
+            "detectionTopSlackDeg": 12,
+            "ascentStartRomDeg": 25,
             "elbowRelXDriftWarn": 0.27,
+            "upperArmAngleDriftWarn": 20.0,
         }
 
     if exercise == "tricep_extension_side":
         return {
-            "side": sideValue if sideValue in {"left", "right"} else "left",
+            "side": sideValue if sideValue in {"left", "right"} else "auto",
             "topAngleDeg": 160,
             "bottomAngleDeg": 85,
             "hysteresisDeg": 5,
@@ -163,8 +168,24 @@ def _exercise_default_options(exercise: str, side: Optional[str]) -> Dict[str, A
             "minRomDeg": 65,
             "bottomMarginDeg": 5,
             "topMarginDeg": 5,
+            "minDetectRomDeg": 35,
+            "detectionBottomSlackDeg": 12,
+            "detectionTopSlackDeg": 12,
+            "descentStartRomDeg": 25,
             "elbowRelXDriftWarn": 0.05,
             "upperArmAngleDriftWarn": 20.0,
+        }
+
+    if exercise == "shoulder_press_front":
+        return {
+            "topElbowThreshold": 130.0,
+            "bottomElbowThreshold": 95.0,
+            "repDetectionMinPressHeight": 0.10,
+            "bottomTooShallowThreshold": 45.0,
+            "lockoutIncompleteThreshold": 145.0,
+            "minPressHeightThreshold": 0.10,
+            "mildTopImbalanceThreshold": 0.08,
+            "highTopImbalanceThreshold": 0.14,
         }
 
     return {}
@@ -179,15 +200,6 @@ def _create_feedback_video_for_exercise(
 ) -> Optional[str]:
     if exercise == "squat_side":
         return create_squat_feedback_video(
-            videoPath=videoPath,
-            poseFrames=poseFrames,
-            analysisResult=analysisResult,
-            outputPath=outputPath,
-            pauseSeconds=4.0,
-        )
-
-    if exercise == "squat_front":
-        return create_front_squat_feedback_video(
             videoPath=videoPath,
             poseFrames=poseFrames,
             analysisResult=analysisResult,
@@ -223,10 +235,11 @@ def _create_feedback_video_for_exercise(
             outputPath=outputPath,
             panelTitle="Pull-Up",
             issueMessages={
+                "bottom_incomplete": "Lower into a deeper hang before the next rep.",
                 "height_incomplete": "Pull higher before ending the rep.",
-                "pull_asymmetry": "Keep the pull more even on both sides.",
+                "pull_asymmetry": "Try to finish the pull more evenly on both sides.",
             },
-            positiveDetailLines=["Pull height and left/right balance looked good."],
+            positiveDetailLines=["Bottom hang, pull height, and top balance looked good."],
             pauseSeconds=4.0,
         )
 
@@ -239,9 +252,12 @@ def _create_feedback_video_for_exercise(
             panelTitle="Bicep Curl",
             issueMessages={
                 "rom_incomplete": "Use a fuller curl range of motion.",
+                "bottom_position_incomplete": "Lower the weight more before starting the curl.",
+                "top_position_incomplete": "Finish the curl higher at the top.",
                 "elbow_drift": "Keep your elbow steadier near your torso.",
+                "upper_arm_instability": "Keep your upper arm steadier during the curl.",
             },
-            positiveDetailLines=["Range of motion and elbow control looked good."],
+            positiveDetailLines=["Range of motion and arm path looked good."],
             pauseSeconds=4.0,
         )
 
@@ -254,6 +270,8 @@ def _create_feedback_video_for_exercise(
             panelTitle="Tricep Extension",
             issueMessages={
                 "rom_incomplete": "Use a fuller range of motion.",
+                "bottom_position_shallow": "Bend more before starting the extension.",
+                "lockout_incomplete": "Finish with a stronger elbow lockout.",
                 "elbow_drift": "Keep your elbow in a steadier position.",
                 "upper_arm_instability": "Keep your upper arm more stable.",
             },
